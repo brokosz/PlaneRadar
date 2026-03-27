@@ -100,28 +100,36 @@ static int parse_readsb_ac(JsonArray ac, float ref_lat, float ref_lon) {
     return count;
 }
 
-// ── Shared HTTP fetch + filtered JSON parse for readsb-format APIs ───────────
-// Plain HTTP (no TLS) eliminates the mbedTLS 16 KB contiguous-SRAM
-// requirement that causes esp-aes OOM failures on a fragmented heap.
-// Flight data is public — no need for encryption.
+// ── Shared HTTPS fetch + filtered JSON parse for readsb-format APIs ──────────
+// Uses getString() so the full response is buffered before parsing.
+// On ESP32-S3 with PSRAM, large String allocs (>16 KB) go to external
+// SRAM, decoupling the TLS decrypt step from the ArduinoJson parse step
+// and reducing peak internal-SRAM demand.
 static bool fetch_readsb_url(const char *tag, const char *url,
                               float ref_lat, float ref_lon) {
-    WiFiClient client;   // plain TCP — no TLS overhead
+    WiFiClientSecure client;
+    client.setInsecure();
 
     HTTPClient http;
     http.begin(client, url);
-    http.setTimeout(15000);
+    http.setTimeout(20000);
 
     int code = http.GET();
     Serial.printf("[%s] HTTP %d\n", tag, code);
     if (code != 200) { http.end(); return false; }
 
+    // getString() fully buffers the response; large payloads land in PSRAM
+    String payload = http.getString();
+    http.end();
+
+    Serial.printf("[%s] %u bytes received\n", tag, payload.length());
+    if (payload.isEmpty()) return false;
+
     JsonDocument filter;
     make_readsb_filter(filter);
     JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getStream(),
+    DeserializationError err = deserializeJson(doc, payload,
                                                DeserializationOption::Filter(filter));
-    http.end();
     if (err) { Serial.printf("[%s] JSON err: %s\n", tag, err.c_str()); return false; }
 
     JsonArray ac = doc["ac"].as<JsonArray>();
@@ -136,7 +144,7 @@ static bool fetch_readsb_url(const char *tag, const char *url,
 static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
     char url[120];
     snprintf(url, sizeof(url),
-        "http://api.airplanes.live/v2/point/%.4f/%.4f/%.0f",
+        "https://api.airplanes.live/v2/point/%.4f/%.4f/%.0f",
         lat, lon, radius_mi * 0.868976f);
     return fetch_readsb_url("APL", url, lat, lon);
 }
@@ -145,7 +153,7 @@ static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
 static bool fetch_adsbfi(float lat, float lon, float radius_mi) {
     char url[120];
     snprintf(url, sizeof(url),
-        "http://opendata.adsb.fi/api/v3/lat/%.4f/lon/%.4f/dist/%.0f",
+        "https://opendata.adsb.fi/api/v3/lat/%.4f/lon/%.4f/dist/%.0f",
         lat, lon, radius_mi * 0.868976f);
     return fetch_readsb_url("ADSBFI", url, lat, lon);
 }
