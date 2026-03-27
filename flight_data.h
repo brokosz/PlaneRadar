@@ -68,6 +68,7 @@ static bool fetch_fr24(float lat, float lon, float radius_mi) {
     http.addHeader("User-Agent", "Mozilla/5.0 (compatible; PlaneRadar/1.0)");
     http.addHeader("Accept",     "application/json");
     http.setTimeout(15000);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
     int code = http.GET();
     Serial.printf("[FR24] HTTP %d\n", code);
