@@ -120,6 +120,11 @@ void setup() {
     // ── Display init ───────────────────────────────────────────────────────
     lv_bb_spi_lcd_create(DISPLAY_TYPE);
 
+    // Apply saved orientation (must happen before any UI is built)
+    if (settings.orientation == ORI_PORTRAIT) {
+        lv_display_set_rotation(lv_display_get_default(), LV_DISPLAY_ROTATION_90);
+    }
+
     // ── Touch init ─────────────────────────────────────────────────────────
     touch_init(TOUCH_SDA, TOUCH_SCL, TOUCH_INT, TOUCH_RST, SCR_W, SCR_H);
     lv_indev_t *indev = lv_indev_create();

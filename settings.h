@@ -3,6 +3,7 @@
 #include <Preferences.h>
 
 enum LocationMode : uint8_t { LOC_AUTO = 0, LOC_ZIP = 1 };
+enum Orientation  : uint8_t { ORI_LANDSCAPE = 0, ORI_PORTRAIT = 1 };
 
 struct Settings {
     LocationMode location_mode  = LOC_AUTO;
@@ -12,6 +13,7 @@ struct Settings {
     int          radius_miles   = 50;
     int          update_interval_s = 30;
     char         city_name[64]  = "Unknown";
+    Orientation  orientation    = ORI_LANDSCAPE;
 };
 
 extern Settings settings;
@@ -27,6 +29,7 @@ inline void settings_load() {
     settings.radius_miles      = p.getInt("radius",     50);
     settings.update_interval_s = p.getInt("interval",   30);
     p.getString("city",  settings.city_name,  sizeof(settings.city_name));
+    settings.orientation       = (Orientation)p.getInt("orient", ORI_LANDSCAPE);
     p.end();
 }
 
@@ -40,5 +43,6 @@ inline void settings_save() {
     p.putInt("radius",    settings.radius_miles);
     p.putInt("interval",  settings.update_interval_s);
     p.putString("city",   settings.city_name);
+    p.putInt("orient",    settings.orientation);
     p.end();
 }

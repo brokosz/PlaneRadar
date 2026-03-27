@@ -62,6 +62,7 @@ static lv_obj_t *kb           = nullptr;
 static lv_obj_t *lbl_loc_info = nullptr;
 static lv_obj_t *btn_r[4]     = {};
 static lv_obj_t *btn_i[4]     = {};
+static lv_obj_t *btn_ori[2]   = {};   // [0]=landscape, [1]=portrait
 static const int RADIUS_OPTS[]   = {25, 50, 100, 200};
 static const int INTERVAL_OPTS[] = {30, 60, 120, 300};
 
@@ -214,6 +215,10 @@ static void cb_open_settings(lv_event_t *e) {
         if (btn_i[i]) lv_obj_set_state(btn_i[i],
             LV_STATE_CHECKED, INTERVAL_OPTS[i] == settings.update_interval_s);
     }
+    if (btn_ori[0]) lv_obj_set_state(btn_ori[0],
+        LV_STATE_CHECKED, settings.orientation == ORI_LANDSCAPE);
+    if (btn_ori[1]) lv_obj_set_state(btn_ori[1],
+        LV_STATE_CHECKED, settings.orientation == ORI_PORTRAIT);
     lv_screen_load_anim(scr_settings, LV_SCR_LOAD_ANIM_MOVE_LEFT, 250, 0, false);
 }
 
@@ -268,40 +273,87 @@ static void cb_interval(lv_event_t *e) {
     settings_save();
 }
 
-// ── Row factory (480px wide) ──────────────────────────────────────────────────
-// Columns:  FLT(80) ROUTE(90) TYPE(52) ALT(88) SPD(72) TREND(28) DIST(64) = 474
+static void cb_orientation(lv_event_t *e) {
+    Orientation ori = (Orientation)(intptr_t)lv_event_get_user_data(e);
+    if (ori == settings.orientation) return;   // no change
+    settings.orientation = ori;
+    settings_save();
+    // Apply immediately — lv_display_set_rotation swaps w/h and remaps touch
+    lv_display_set_rotation(lv_display_get_default(),
+        ori == ORI_PORTRAIT ? LV_DISPLAY_ROTATION_90 : LV_DISPLAY_ROTATION_0);
+    // Rebuild all screens for the new dimensions
+    lv_obj_del(scr_main);     scr_main     = nullptr;
+    lv_obj_del(scr_settings); scr_settings = nullptr;
+    // Clear row handles so build_main_screen re-creates them
+    for (int i = 0; i < MAX_ROWS; i++) g_rows[i] = {};
+    btn_loc_auto = btn_loc_zip = ta_zip = kb = lbl_loc_info = nullptr;
+    for (int i = 0; i < 4; i++) { btn_r[i] = btn_i[i] = nullptr; }
+    btn_ori[0] = btn_ori[1] = nullptr;
+    ov_status = lbl_status = nullptr;
+    lbl_city = lbl_updated = lbl_count = nullptr;
+    build_main_screen();
+    build_settings_screen();
+    ui_show_main_screen();
+}
+
+// ── Row factory — adapts to landscape (480×33) or portrait (272×48, 2 lines) ──
 static FlightRow make_row(lv_obj_t *parent, int idx) {
+    bool port = (settings.orientation == ORI_PORTRAIT);
     FlightRow r;
+    lv_color_t row_bg = (idx % 2 == 0) ? C_SURFACE : lv_color_hex(0x0d0d0d);
+
     r.row = lv_obj_create(parent);
-    lv_obj_set_size(r.row, 480, 33);
-    lv_obj_set_style_bg_color(r.row, (idx % 2 == 0) ? C_SURFACE : lv_color_hex(0x0d0d0d), 0);
+    lv_obj_set_size(r.row, port ? 272 : 480, port ? 48 : 33);
+    lv_obj_set_style_bg_color(r.row, row_bg, 0);
     lv_obj_set_style_bg_opa(r.row, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(r.row, 0, 0);
     lv_obj_set_style_radius(r.row, 0, 0);
     lv_obj_set_style_pad_all(r.row, 0, 0);
     lv_obj_clear_flag(r.row, LV_OBJ_FLAG_SCROLLABLE);
 
-    auto col = [&](int x, int w, lv_color_t col, lv_text_align_t align) -> lv_obj_t * {
-        lv_obj_t *l = make_label(r.row, FONT_DATA, col, align);
-        lv_obj_set_pos(l, x + 4, 9);
-        lv_obj_set_width(l, w - 6);
-        return l;
-    };
-
-    r.lbl_flt   = col(0,   80,  C_ACCENT,              LV_TEXT_ALIGN_LEFT);
-    r.lbl_route = col(80,  90,  C_TEXT,                LV_TEXT_ALIGN_LEFT);
-    r.lbl_type  = col(170, 52,  C_DIM,                 LV_TEXT_ALIGN_LEFT);
-    r.lbl_alt   = col(222, 88,  lv_color_hex(0x66bb6a),LV_TEXT_ALIGN_RIGHT);
-    r.lbl_spd   = col(310, 72,  C_SPD,                 LV_TEXT_ALIGN_RIGHT);
-    r.lbl_trend = col(382, 28,  C_DIM,                 LV_TEXT_ALIGN_CENTER);
-    r.lbl_dist  = col(410, 64,  C_DIST,                LV_TEXT_ALIGN_RIGHT);
-
-    lv_obj_set_style_text_font(r.lbl_flt,  &lv_font_montserrat_14, 0);
+    if (!port) {
+        // ── Landscape: single line, 7 columns ─────────────────────────────
+        // FLT(80) ROUTE(90) TYPE(52) ALT(88) SPD(72) TREND(28) DIST(64) = 474
+        auto col = [&](int x, int w, lv_color_t c, lv_text_align_t a) -> lv_obj_t * {
+            lv_obj_t *l = make_label(r.row, FONT_DATA, c, a);
+            lv_obj_set_pos(l, x + 4, 9);
+            lv_obj_set_width(l, w - 6);
+            return l;
+        };
+        r.lbl_flt   = col(0,   80, C_ACCENT,               LV_TEXT_ALIGN_LEFT);
+        r.lbl_route = col(80,  90, C_TEXT,                  LV_TEXT_ALIGN_LEFT);
+        r.lbl_type  = col(170, 52, C_DIM,                   LV_TEXT_ALIGN_LEFT);
+        r.lbl_alt   = col(222, 88, lv_color_hex(0x66bb6a),  LV_TEXT_ALIGN_RIGHT);
+        r.lbl_spd   = col(310, 72, C_SPD,                   LV_TEXT_ALIGN_RIGHT);
+        r.lbl_trend = col(382, 28, C_DIM,                   LV_TEXT_ALIGN_CENTER);
+        r.lbl_dist  = col(410, 64, C_DIST,                  LV_TEXT_ALIGN_RIGHT);
+    } else {
+        // ── Portrait: two lines, width=272 ────────────────────────────────
+        // Line 1 (y=5):  FLT(66) ROUTE(86) TYPE(44)  DIST(right,64)
+        // Line 2 (y=28): ALT(110)           SPD(80)  TREND(22)
+        auto col = [&](int x, int w, int y, lv_color_t c, lv_text_align_t a) -> lv_obj_t * {
+            lv_obj_t *l = make_label(r.row, FONT_DATA, c, a);
+            lv_obj_set_pos(l, x + 4, y);
+            lv_obj_set_width(l, w - 6);
+            return l;
+        };
+        r.lbl_flt   = col(0,   66,  5, C_ACCENT,               LV_TEXT_ALIGN_LEFT);
+        r.lbl_route = col(66,  86,  5, C_TEXT,                  LV_TEXT_ALIGN_LEFT);
+        r.lbl_type  = col(152, 44,  5, C_DIM,                   LV_TEXT_ALIGN_LEFT);
+        r.lbl_dist  = col(196, 70,  5, C_DIST,                  LV_TEXT_ALIGN_RIGHT);
+        r.lbl_alt   = col(0,  110, 28, lv_color_hex(0x66bb6a),  LV_TEXT_ALIGN_LEFT);
+        r.lbl_spd   = col(110, 80, 28, C_SPD,                   LV_TEXT_ALIGN_LEFT);
+        r.lbl_trend = col(190, 26, 28, C_DIM,                   LV_TEXT_ALIGN_CENTER);
+    }
     return r;
 }
 
-// ── Main screen build ─────────────────────────────────────────────────────────
+// ── Main screen build — adapts to landscape (480×272) or portrait (272×480) ──
 static void build_main_screen() {
+    bool port  = (settings.orientation == ORI_PORTRAIT);
+    int  scr_w = port ? 272 : 480;
+    int  scr_h = port ? 480 : 272;
+
     scr_main = lv_obj_create(nullptr);
     lv_obj_set_style_bg_color(scr_main, C_BG, 0);
     lv_obj_set_style_bg_opa(scr_main, LV_OPA_COVER, 0);
@@ -309,43 +361,48 @@ static void build_main_screen() {
 
     // ── Header bar ───────────────────────────────────────────────────────────
     lv_obj_t *hdr = lv_obj_create(scr_main);
-    lv_obj_set_size(hdr, 480, 40);
+    lv_obj_set_size(hdr, scr_w, 40);
     lv_obj_set_pos(hdr, 0, 0);
     lv_obj_set_style_bg_color(hdr, C_SURFACE, 0);
     lv_obj_set_style_bg_opa(hdr, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(hdr, 0, 0);
-    lv_obj_set_style_border_side(hdr, LV_BORDER_SIDE_BOTTOM, 0);
-    lv_obj_set_style_border_color(hdr, C_ACCENT, 0);
-    lv_obj_set_style_border_width(hdr, 2, LV_PART_MAIN);
-    // Actually use outline for bottom border effect:
-    lv_obj_set_style_outline_color(hdr, C_ACCENT, 0);
-    lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(hdr, 0, 0);
     lv_obj_set_style_pad_all(hdr, 0, 0);
+    lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Title
     lv_obj_t *lbl_title = lv_label_create(hdr);
     lv_label_set_text(lbl_title, LV_SYMBOL_UPLOAD "  OVERHEAD");
     lv_obj_set_style_text_font(lbl_title, FONT_TITLE, 0);
     lv_obj_set_style_text_color(lbl_title, C_ACCENT, 0);
     lv_obj_set_pos(lbl_title, 8, 10);
 
-    // City label
-    lbl_city = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
-    lv_obj_set_pos(lbl_city, 170, 14);
-    lv_obj_set_width(lbl_city, 150);
-    lv_label_set_text(lbl_city, settings.city_name);
+    if (!port) {
+        // City + updated labels only fit in landscape header
+        lbl_city = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_pos(lbl_city, 170, 14);
+        lv_obj_set_width(lbl_city, 150);
+        lv_label_set_text(lbl_city, settings.city_name);
 
-    // Last-updated label
-    lbl_updated = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
-    lv_obj_set_pos(lbl_updated, 330, 14);
-    lv_obj_set_width(lbl_updated, 90);
-    lv_label_set_text(lbl_updated, "---");
+        lbl_updated = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
+        lv_obj_set_pos(lbl_updated, 330, 14);
+        lv_obj_set_width(lbl_updated, 90);
+        lv_label_set_text(lbl_updated, "---");
+    } else {
+        // In portrait the header is narrower — city goes below the list
+        lbl_city    = make_label(scr_main, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
+        lbl_updated = make_label(scr_main, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
+        lv_obj_set_pos(lbl_city,    4,  scr_h - 16);
+        lv_obj_set_pos(lbl_updated, 0,  scr_h - 16);
+        lv_obj_set_width(lbl_city,    130);
+        lv_obj_set_width(lbl_updated, 264);
+        lv_label_set_text(lbl_city,    settings.city_name);
+        lv_label_set_text(lbl_updated, "---");
+    }
 
-    // Settings gear button
+    // Gear button — always top-right
     lv_obj_t *btn_gear = lv_btn_create(hdr);
     lv_obj_set_size(btn_gear, 36, 36);
-    lv_obj_set_pos(btn_gear, 440, 2);
+    lv_obj_set_pos(btn_gear, scr_w - 38, 2);
     lv_obj_set_style_bg_color(btn_gear, C_SURFACE, 0);
     lv_obj_set_style_border_width(btn_gear, 0, 0);
     lv_obj_set_style_radius(btn_gear, 4, 0);
@@ -355,43 +412,48 @@ static void build_main_screen() {
     lv_obj_set_style_text_color(lbl_gear, C_DIM, 0);
     lv_obj_center(lbl_gear);
 
-    // ── Column headers ───────────────────────────────────────────────────────
-    lv_obj_t *col_hdr = lv_obj_create(scr_main);
-    lv_obj_set_size(col_hdr, 480, 22);
-    lv_obj_set_pos(col_hdr, 0, 40);
-    lv_obj_set_style_bg_color(col_hdr, lv_color_hex(0x0d0d0d), 0);
-    lv_obj_set_style_bg_opa(col_hdr, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(col_hdr, 0, 0);
-    lv_obj_set_style_radius(col_hdr, 0, 0);
-    lv_obj_set_style_pad_all(col_hdr, 0, 0);
-    lv_obj_clear_flag(col_hdr, LV_OBJ_FLAG_SCROLLABLE);
+    // ── Column headers (landscape only — too narrow in portrait) ─────────────
+    int list_y;
+    if (!port) {
+        lv_obj_t *col_hdr = lv_obj_create(scr_main);
+        lv_obj_set_size(col_hdr, scr_w, 22);
+        lv_obj_set_pos(col_hdr, 0, 40);
+        lv_obj_set_style_bg_color(col_hdr, lv_color_hex(0x0d0d0d), 0);
+        lv_obj_set_style_bg_opa(col_hdr, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(col_hdr, 0, 0);
+        lv_obj_set_style_radius(col_hdr, 0, 0);
+        lv_obj_set_style_pad_all(col_hdr, 0, 0);
+        lv_obj_clear_flag(col_hdr, LV_OBJ_FLAG_SCROLLABLE);
+        auto ch = [&](int x, int w, const char *text, lv_text_align_t align) {
+            lv_obj_t *l = make_label(col_hdr, FONT_SMALL, C_DIM, align);
+            lv_obj_set_pos(l, x + 4, 5);
+            lv_obj_set_width(l, w - 6);
+            lv_label_set_text(l, text);
+        };
+        ch(0,   80, "FLIGHT",   LV_TEXT_ALIGN_LEFT);
+        ch(80,  90, "ROUTE",    LV_TEXT_ALIGN_LEFT);
+        ch(170, 52, "TYPE",     LV_TEXT_ALIGN_LEFT);
+        ch(222, 88, "ALTITUDE", LV_TEXT_ALIGN_RIGHT);
+        ch(310, 72, "SPEED",    LV_TEXT_ALIGN_RIGHT);
+        ch(382, 28, "",         LV_TEXT_ALIGN_CENTER);
+        ch(410, 64, "DIST",     LV_TEXT_ALIGN_RIGHT);
 
-    auto ch = [&](int x, int w, const char *text, lv_text_align_t align) {
-        lv_obj_t *l = make_label(col_hdr, FONT_SMALL, C_DIM, align);
-        lv_obj_set_pos(l, x + 4, 5);
-        lv_obj_set_width(l, w - 6);
-        lv_label_set_text(l, text);
-    };
-    ch(0,   80,  "FLIGHT",   LV_TEXT_ALIGN_LEFT);
-    ch(80,  90,  "ROUTE",    LV_TEXT_ALIGN_LEFT);
-    ch(170, 52,  "TYPE",     LV_TEXT_ALIGN_LEFT);
-    ch(222, 88,  "ALTITUDE", LV_TEXT_ALIGN_RIGHT);
-    ch(310, 72,  "SPEED",    LV_TEXT_ALIGN_RIGHT);
-    ch(382, 28,  "",         LV_TEXT_ALIGN_CENTER);
-    ch(410, 64,  "DIST",     LV_TEXT_ALIGN_RIGHT);
-
-    // Separator line
-    lv_obj_t *sep = lv_obj_create(scr_main);
-    lv_obj_set_size(sep, 480, 1);
-    lv_obj_set_pos(sep, 0, 62);
-    lv_obj_set_style_bg_color(sep, C_SEP, 0);
-    lv_obj_set_style_bg_opa(sep, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(sep, 0, 0);
+        lv_obj_t *sep = lv_obj_create(scr_main);
+        lv_obj_set_size(sep, scr_w, 1);
+        lv_obj_set_pos(sep, 0, 62);
+        lv_obj_set_style_bg_color(sep, C_SEP, 0);
+        lv_obj_set_style_bg_opa(sep, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(sep, 0, 0);
+        list_y = 63;
+    } else {
+        list_y = 40;
+    }
 
     // ── Scrollable flight list ────────────────────────────────────────────────
+    int list_h = (port ? scr_h - 56 : scr_h - list_y);  // leave 16px footer in portrait
     lv_obj_t *list = lv_obj_create(scr_main);
-    lv_obj_set_pos(list, 0, 63);
-    lv_obj_set_size(list, 480, 209);
+    lv_obj_set_pos(list, 0, list_y);
+    lv_obj_set_size(list, scr_w, list_h);
     lv_obj_set_style_bg_color(list, C_BG, 0);
     lv_obj_set_style_bg_opa(list, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(list, 0, 0);
@@ -400,12 +462,10 @@ static void build_main_screen() {
     lv_obj_set_style_pad_row(list, 0, 0);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
 
-    // Count label (also used for "no flights" state)
     lbl_count = make_label(scr_main, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
-    lv_obj_set_pos(lbl_count, 0, 258);
-    lv_obj_set_width(lbl_count, 470);
+    lv_obj_set_pos(lbl_count, 0, scr_h - 16);
+    lv_obj_set_width(lbl_count, scr_w - 4);
 
-    // Pre-allocate rows
     for (int i = 0; i < MAX_ROWS; i++) {
         g_rows[i] = make_row(list, i);
         lv_obj_add_flag(g_rows[i].row, LV_OBJ_FLAG_HIDDEN);
@@ -413,7 +473,7 @@ static void build_main_screen() {
 
     // ── Status overlay ────────────────────────────────────────────────────────
     ov_status = lv_obj_create(scr_main);
-    lv_obj_set_size(ov_status, 480, 272);
+    lv_obj_set_size(ov_status, scr_w, scr_h);
     lv_obj_set_pos(ov_status, 0, 0);
     lv_obj_set_style_bg_color(ov_status, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(ov_status, LV_OPA_80, 0);
@@ -423,28 +483,35 @@ static void build_main_screen() {
 
     lv_obj_t *spinner = lv_spinner_create(ov_status);
     lv_obj_set_size(spinner, 48, 48);
-    lv_obj_set_pos(spinner, 180, 90);
+    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, -30);
     lv_obj_set_style_arc_color(spinner, C_ACCENT, LV_PART_INDICATOR);
 
     lbl_status = lv_label_create(ov_status);
     lv_label_set_text(lbl_status, "Loading...");
     lv_obj_set_style_text_font(lbl_status, FONT_HDR, 0);
     lv_obj_set_style_text_color(lbl_status, C_TEXT, 0);
-    lv_obj_set_pos(lbl_status, 140, 150);
-    lv_obj_set_width(lbl_status, 200);
+    lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 30);
+    lv_obj_set_width(lbl_status, scr_w - 40);
     lv_obj_set_style_text_align(lbl_status, LV_TEXT_ALIGN_CENTER, 0);
 }
 
-// ── Settings screen build ─────────────────────────────────────────────────────
+// ── Settings screen build — adapts to orientation ────────────────────────────
 static void build_settings_screen() {
+    bool port  = (settings.orientation == ORI_PORTRAIT);
+    int  scr_w = port ? 272 : 480;
+    int  scr_h = port ? 480 : 272;
+    int  body_w = scr_w - 24;  // 12px padding each side
+
     scr_settings = lv_obj_create(nullptr);
     lv_obj_set_style_bg_color(scr_settings, C_BG, 0);
     lv_obj_set_style_bg_opa(scr_settings, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(scr_settings, LV_OBJ_FLAG_SCROLLABLE);
+    // Portrait needs scroll since more sections than fit on screen
+    if (port) lv_obj_set_style_base_dir(scr_settings, LV_BASE_DIR_LTR, 0);
+    else lv_obj_clear_flag(scr_settings, LV_OBJ_FLAG_SCROLLABLE);
 
     // Header
     lv_obj_t *hdr = lv_obj_create(scr_settings);
-    lv_obj_set_size(hdr, 480, 40);
+    lv_obj_set_size(hdr, scr_w, 40);
     lv_obj_set_pos(hdr, 0, 0);
     lv_obj_set_style_bg_color(hdr, C_SURFACE, 0);
     lv_obj_set_style_bg_opa(hdr, LV_OPA_COVER, 0);
@@ -470,10 +537,10 @@ static void build_settings_screen() {
     lv_obj_set_style_text_color(lbl_title, C_TEXT, 0);
     lv_obj_set_pos(lbl_title, 55, 10);
 
-    // ── Body ─────────────────────────────────────────────────────────────────
+    // ── Body (scrollable in portrait to fit all sections) ────────────────────
     lv_obj_t *body = lv_obj_create(scr_settings);
     lv_obj_set_pos(body, 0, 40);
-    lv_obj_set_size(body, 480, 232);
+    lv_obj_set_size(body, scr_w, scr_h - 40);
     lv_obj_set_style_bg_color(body, C_BG, 0);
     lv_obj_set_style_bg_opa(body, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(body, 0, 0);
@@ -482,7 +549,7 @@ static void build_settings_screen() {
     lv_obj_set_style_pad_ver(body, 8, 0);
     lv_obj_set_style_pad_row(body, 10, 0);
     lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
-    lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+    if (!port) lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
 
     // Section label helper
     auto section = [&](const char *text) {
@@ -490,13 +557,13 @@ static void build_settings_screen() {
         lv_label_set_text(l, text);
         lv_obj_set_style_text_font(l, FONT_SMALL, 0);
         lv_obj_set_style_text_color(l, C_ACCENT, 0);
-        lv_obj_set_width(l, 456);
+        lv_obj_set_width(l, body_w);
     };
 
-    // Row helper
+    // Row of buttons helper
     auto row_obj = [&]() {
         lv_obj_t *r = lv_obj_create(body);
-        lv_obj_set_size(r, 456, 36);
+        lv_obj_set_size(r, body_w, 36);
         lv_obj_set_style_bg_opa(r, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(r, 0, 0);
         lv_obj_set_style_radius(r, 0, 0);
@@ -507,6 +574,16 @@ static void build_settings_screen() {
         lv_obj_set_style_pad_column(r, 6, 0);
         return r;
     };
+
+    // ── Orientation ───────────────────────────────────────────────────────────
+    section("ORIENTATION");
+    lv_obj_t *row0 = row_obj();
+    btn_ori[0] = make_btn(row0, "Landscape", cb_orientation, (void *)(intptr_t)ORI_LANDSCAPE);
+    lv_obj_set_size(btn_ori[0], port ? 110 : 120, 32);
+    btn_ori[1] = make_btn(row0, "Portrait",  cb_orientation, (void *)(intptr_t)ORI_PORTRAIT);
+    lv_obj_set_size(btn_ori[1], port ? 100 : 110, 32);
+    lv_obj_set_state(btn_ori[0], LV_STATE_CHECKED, settings.orientation == ORI_LANDSCAPE);
+    lv_obj_set_state(btn_ori[1], LV_STATE_CHECKED, settings.orientation == ORI_PORTRAIT);
 
     // ── Location mode ─────────────────────────────────────────────────────────
     section("LOCATION");
@@ -529,14 +606,20 @@ static void build_settings_screen() {
     lv_obj_set_style_border_color(ta_zip, C_SEP, 0);
     lv_obj_add_event_cb(ta_zip, cb_ta_zip, LV_EVENT_CLICKED, nullptr);
 
-    // Current location info
-    lbl_loc_info = make_label(zip_row, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
-    lv_obj_set_pos(lbl_loc_info, 130, 8);
-    lv_obj_set_width(lbl_loc_info, 320);
+    // Current location info (landscape: inline; portrait: separate row)
+    if (!port) {
+        lbl_loc_info = make_label(zip_row, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_pos(lbl_loc_info, 130, 8);
+        lv_obj_set_width(lbl_loc_info, body_w - 130);
+    } else {
+        lv_obj_t *info_row = row_obj();
+        lbl_loc_info = make_label(info_row, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_width(lbl_loc_info, body_w);
+    }
 
-    // Keyboard (hidden by default)
+    // Keyboard (hidden by default, sized for current orientation)
     kb = lv_keyboard_create(scr_settings);
-    lv_obj_set_size(kb, 480, 180);
+    lv_obj_set_size(kb, scr_w, port ? 220 : 180);
     lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_keyboard_set_textarea(kb, ta_zip);
     lv_keyboard_set_mode(kb, LV_KEYBOARD_MODE_NUMBER);
@@ -548,18 +631,20 @@ static void build_settings_screen() {
     section("SEARCH RADIUS");
     lv_obj_t *row2 = row_obj();
     const char *r_labels[] = {"25 mi", "50 mi", "100 mi", "200 mi"};
+    int r_w = port ? 56 : 80;
     for (int i = 0; i < 4; i++) {
         btn_r[i] = make_btn(row2, r_labels[i], cb_radius, (void *)(intptr_t)i);
-        lv_obj_set_size(btn_r[i], 80, 32);
+        lv_obj_set_size(btn_r[i], r_w, 32);
     }
 
     // ── Update interval ───────────────────────────────────────────────────────
     section("UPDATE EVERY");
     lv_obj_t *row3 = row_obj();
     const char *i_labels[] = {"30 s", "60 s", "2 min", "5 min"};
+    int i_w = port ? 56 : 80;
     for (int i = 0; i < 4; i++) {
         btn_i[i] = make_btn(row3, i_labels[i], cb_interval, (void *)(intptr_t)i);
-        lv_obj_set_size(btn_i[i], 80, 32);
+        lv_obj_set_size(btn_i[i], i_w, 32);
     }
 }
 
