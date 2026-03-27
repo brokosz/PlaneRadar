@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PlaneRadar — Install</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #080808;
+      --surface: #111111;
+      --surface2:#1a1a1a;
+      --accent:  #00e676;
+      --text:    #dedede;
+      --dim:     #666666;
+      --sep:     #222222;
+      --red:     #ef5350;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Nav ──────────────────────────────────────────────────────────────── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--sep);
+    }
+    .nav-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.6rem;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+    }
+    .nav-logo span { color: var(--dim); }
+    .nav-links a {
+      color: var(--dim);
+      text-decoration: none;
+      font-size: 0.85rem;
+      margin-left: 24px;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── Hero ─────────────────────────────────────────────────────────────── */
+    .hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1100px;
+      margin: 80px auto 60px;
+      padding: 0 40px;
+      gap: 60px;
+    }
+    .hero-left { flex: 1; }
+    .hero-eyebrow {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3rem, 7vw, 5.5rem);
+      line-height: 0.95;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      margin-bottom: 20px;
+    }
+    h1 .accent { color: var(--accent); }
+    .hero-sub {
+      font-size: 1.05rem;
+      color: var(--dim);
+      line-height: 1.6;
+      max-width: 440px;
+      margin-bottom: 36px;
+    }
+
+    /* ── Install button area ─────────────────────────────────────────────── */
+    .install-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    esp-web-install-button {
+      --esp-tools-button-color: var(--accent);
+      --esp-tools-button-text-color: #000;
+    }
+    esp-web-install-button::part(button) {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 0.12em;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 14px 36px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    esp-web-install-button::part(button):hover {
+      opacity: 0.88;
+      transform: translateY(-1px);
+    }
+    .browser-note {
+      font-size: 0.78rem;
+      color: var(--dim);
+      font-family: 'Roboto Mono', monospace;
+    }
+    .browser-note a { color: var(--dim); }
+    .browser-note .warn { color: var(--red); }
+
+    /* ── Device mockup ───────────────────────────────────────────────────── */
+    .hero-right { flex: 0 0 420px; }
+    .device-frame {
+      background: var(--surface);
+      border: 2px solid var(--sep);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 24px 80px rgba(0,230,118,0.06), 0 4px 24px rgba(0,0,0,0.6);
+    }
+    .device-screen {
+      background: var(--bg);
+      border-radius: 6px;
+      overflow: hidden;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.72rem;
+    }
+    .ds-header {
+      background: var(--surface);
+      padding: 7px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--accent);
+    }
+    .ds-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+    }
+    .ds-meta { color: var(--dim); font-size: 0.65rem; }
+    .ds-cols {
+      display: grid;
+      grid-template-columns: 70px 72px 40px 70px 58px 20px 52px;
+      padding: 4px 8px;
+      background: #0d0d0d;
+      color: var(--dim);
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+    }
+    .ds-row {
+      display: grid;
+      grid-template-columns: 70px 72px 40px 70px 58px 20px 52px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--sep);
+      align-items: center;
+    }
+    .ds-row:nth-child(odd)  { background: var(--surface); }
+    .ds-row:nth-child(even) { background: #0d0d0d; }
+    .c-accent { color: var(--accent); }
+    .c-green  { color: #66bb6a; }
+    .c-amber  { color: #ffb74d; }
+    .c-cyan   { color: #4fc3f7; }
+    .c-red    { color: var(--red); }
+    .c-dim    { color: var(--dim); }
+    .r { text-align: right; }
+
+    /* ── Steps ───────────────────────────────────────────────────────────── */
+    .steps-section {
+      max-width: 1100px;
+      margin: 0 auto 80px;
+      padding: 0 40px;
+    }
+    .section-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.8rem;
+      letter-spacing: 0.08em;
+      color: var(--text);
+      margin-bottom: 32px;
+    }
+    .section-title span { color: var(--accent); }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--sep);
+      border-radius: 8px;
+      padding: 24px;
+    }
+    .step-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.2rem;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 10px;
+    }
+    .step-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .step-desc {
+      font-size: 0.82rem;
+      color: var(--dim);
+      line-height: 1.5;
+    }
+    .step-desc code {
+      font-family: 'Roboto Mono', monospace;
+      color: var(--accent);
+      font-size: 0.78rem;
+      background: var(--surface2);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    /* ── Features ────────────────────────────────────────────────────────── */
+    .features-section {
+      max-width: 1100px;
+      margin: 0 auto 80px;
+      padding: 0 40px;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--sep);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .feature-icon {
+      font-size: 1.4rem;
+      margin-bottom: 10px;
+    }
+    .feature-title {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .feature-desc {
+      font-size: 0.8rem;
+      color: var(--dim);
+      line-height: 1.5;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--sep);
+      padding: 24px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--dim);
+    }
+    footer a { color: var(--dim); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 820px) {
+      .hero { flex-direction: column; margin: 40px auto 40px; }
+      .hero-right { flex: none; width: 100%; max-width: 420px; }
+      nav { padding: 16px 20px; }
+      .hero, .steps-section, .features-section { padding: 0 20px; }
+      footer { flex-direction: column; gap: 8px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Nav ───────────────────────────────────────────────────────────────── -->
+  <nav>
+    <div class="nav-logo">Plane<span>Radar</span></div>
+    <div class="nav-links">
+      <a href="https://github.com/brokosz/PlaneRadar" target="_blank">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-eyebrow">✦ JC4827W543 · ESP32-S3 · 4.3" Touch TFT</div>
+      <h1>Planes<br/><span class="accent">Overhead</span><br/>Live.</h1>
+      <p class="hero-sub">
+        Real-time flight data on your desk. See every aircraft overhead —
+        flight number, route, altitude, speed, and distance — updated every 30 seconds.
+      </p>
+
+      <div class="install-wrap">
+        <esp-web-install-button manifest="manifest.json">
+          <span slot="unsupported">
+            <span style="color:var(--red); font-family:'Roboto Mono',monospace; font-size:0.85rem;">
+              ✗ Use Chrome or Edge to install
+            </span>
+          </span>
+        </esp-web-install-button>
+
+        <p class="browser-note">
+          Requires <a href="https://www.google.com/chrome/" target="_blank">Chrome</a> or
+          <a href="https://www.microsoft.com/edge" target="_blank">Edge</a> · USB-C cable ·
+          <span class="warn">Firefox / Safari not supported</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Device preview mockup -->
+    <div class="hero-right">
+      <div class="device-frame">
+        <div class="device-screen">
+          <div class="ds-header">
+            <span class="ds-title">✈ OVERHEAD</span>
+            <span class="ds-meta">Chicago, IL &nbsp;·&nbsp; 12s ago</span>
+          </div>
+          <div class="ds-cols">
+            <span>FLIGHT</span><span>ROUTE</span><span>TYPE</span>
+            <span class="r">ALTITUDE</span><span class="r">SPEED</span>
+            <span></span><span class="r">DIST</span>
+          </div>
+          <div class="ds-row">
+            <span class="c-accent">UA891</span>
+            <span>EWR→SFO</span>
+            <span class="c-dim">B77W</span>
+            <span class="c-green r">38,000 ft</span>
+            <span class="c-amber r">512 kts</span>
+            <span class="c-dim">→</span>
+            <span class="c-cyan r">8.1 mi</span>
+          </div>
+          <div class="ds-row">
+            <span class="c-accent">AA2341</span>
+            <span>ORD→LAX</span>
+            <span class="c-dim">B738</span>
+            <span class="c-green r">35,000 ft</span>
+            <span class="c-amber r">485 kts</span>
+            <span class="c-green">↑</span>
+            <span class="c-cyan r">12.3 mi</span>
+          </div>
+          <div class="ds-row">
+            <span class="c-accent">SW3421</span>
+            <span>MDW→PHX</span>
+            <span class="c-dim">B737</span>
+            <span class="c-green r">28,000 ft</span>
+            <span class="c-amber r">420 kts</span>
+            <span class="c-red">↓</span>
+            <span class="c-cyan r">5.2 mi</span>
+          </div>
+          <div class="ds-row">
+            <span class="c-accent">DL1105</span>
+            <span>MSP→BOS</span>
+            <span class="c-dim">A320</span>
+            <span class="c-green r">33,000 ft</span>
+            <span class="c-amber r">460 kts</span>
+            <span class="c-dim">→</span>
+            <span class="c-cyan r">22.7 mi</span>
+          </div>
+          <div class="ds-row">
+            <span class="c-accent">FX3291</span>
+            <span>MEM→ORD</span>
+            <span class="c-dim">B763</span>
+            <span class="c-green r">25,000 ft</span>
+            <span class="c-amber r">380 kts</span>
+            <span class="c-green">↑</span>
+            <span class="c-cyan r">18.4 mi</span>
+          </div>
+          <div class="ds-row">
+            <span class="c-accent">N/A</span>
+            <span>---→---</span>
+            <span class="c-dim">C172</span>
+            <span class="c-green r">3,500 ft</span>
+            <span class="c-amber r">95 kts</span>
+            <span class="c-dim">→</span>
+            <span class="c-cyan r">31.0 mi</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── After-install steps ────────────────────────────────────────────────── -->
+  <section class="steps-section">
+    <h2 class="section-title">After <span>Flashing</span></h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-title">Connect to PlaneRadar Wi-Fi</div>
+        <div class="step-desc">
+          The device broadcasts a setup network. Join <code>PlaneRadar</code>
+          on your phone and a setup page opens automatically.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-title">Enter your Wi-Fi credentials</div>
+        <div class="step-desc">
+          Type your home network name and password. Optionally enter a
+          <code>ZIP code</code> — or leave blank to auto-locate via IP.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-title">Flights appear in ~30 seconds</div>
+        <div class="step-desc">
+          The device locates you, fetches from FlightRadar24, and displays
+          all aircraft within your search radius, sorted by distance.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-title">Tap ⚙ to adjust settings</div>
+        <div class="step-desc">
+          Change location, ZIP code, search radius (25–200 mi), and
+          update interval anytime from the on-device settings screen.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ──────────────────────────────────────────────────────────── -->
+  <section class="features-section">
+    <h2 class="section-title">What You <span>Get</span></h2>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">✈</div>
+        <div class="feature-title">Live Flight Data</div>
+        <div class="feature-desc">FlightRadar24 data refreshed every 30 seconds. Falls back to OpenSky Network automatically.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📍</div>
+        <div class="feature-title">Auto Location</div>
+        <div class="feature-desc">Detects your location via IP on first boot, or enter a ZIP code for precision.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">↑↓</div>
+        <div class="feature-title">Altitude Trend</div>
+        <div class="feature-desc">Green arrow for climbing, red for descending, grey for level flight — at a glance.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⚙</div>
+        <div class="feature-title">On-Device Settings</div>
+        <div class="feature-desc">Touch-based settings screen. Change ZIP code, radius, and refresh rate without reflashing.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📡</div>
+        <div class="feature-title">No Cloud, No Account</div>
+        <div class="feature-desc">Uses free public APIs. No sign-up, no API key, no subscription required.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🖥</div>
+        <div class="feature-title">Same Hardware as Halo-F1</div>
+        <div class="feature-desc">Built for the JC4827W543 board — ESP32-S3 with 4.3" capacitive touch TFT.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────────── -->
+  <footer>
+    <span>PlaneRadar — open source · no affiliation with FlightRadar24</span>
+    <a href="https://github.com/brokosz/PlaneRadar" target="_blank">View on GitHub →</a>
+  </footer>
+
+</body>
+</html>

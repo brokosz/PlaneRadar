@@ -1,0 +1,200 @@
+/*
+ * PlaneRadar — overhead flight display for JC4827W543 (ESP32-S3 + 4.3" TFT)
+ *
+ * Hardware: same board as Halo-F1 (https://halof1.com)
+ * Display:  480×272 capacitive touch TFT (GT911 touch controller)
+ *
+ * ── Required libraries (install via Arduino Library Manager) ─────────────────
+ *   ArduinoJson       >= 7.x       (Benoit Blanchon)
+ *   WiFiManager       >= 2.0.17    (tablatronix/tzapu)
+ *   LVGL              >= 9.3.0     (lvgl)
+ *   bb_spi_lcd        >= 2.7.1     (bitbank2)
+ *   bb_captouch       latest       (bitbank2)
+ *
+ * ── Files to copy from the Halo-F1 repo ─────────────────────────────────────
+ *   https://github.com/FabioRoss/Halo-F1
+ *     lv_conf.h          → copy into this sketch folder
+ *     lv_bb_spi_lcd.h    → copy into this sketch folder
+ *     lv_bb_spi_lcd.cpp  → copy into this sketch folder
+ *     touchscreen.h      → copy into this sketch folder
+ *
+ * ── Board settings in Arduino IDE ───────────────────────────────────────────
+ *   Board:         ESP32S3 Dev Module
+ *   Flash:         16MB  (128Mb)
+ *   PSRAM:         OPI PSRAM
+ *   Partition:     Huge APP (3MB No OTA / 1MB SPIFFS)
+ *   USB Mode:      Hardware CDC and JTAG
+ */
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <WiFiManager.h>
+#include <Preferences.h>
+#include <lvgl.h>
+#include "lv_bb_spi_lcd.h"
+#include "touchscreen.h"
+#include "settings.h"
+#include "location.h"
+#include "flight_data.h"
+#include "ui.h"
+
+// ── Display type constant for bb_spi_lcd ─────────────────────────────────────
+// JC4827W543 / CYD543 — check lv_bb_spi_lcd.cpp from Halo-F1 for the exact
+// constant used there (it may be named LCD_CYD543 or DISPLAY_CYD543).
+// The value below matches what Halo-F1 uses at time of writing.
+#define DISPLAY_TYPE  LCD_CYD543
+
+// ── Touch pins (GT911 capacitive, same as Halo-F1) ───────────────────────────
+#define TOUCH_SDA  8
+#define TOUCH_SCL  4
+#define TOUCH_INT  3
+#define TOUCH_RST  (-1)
+
+// ── Screen dimensions ────────────────────────────────────────────────────────
+#define SCR_W  480
+#define SCR_H  272
+
+// ────────────────────────────────────────────────────────────────────────────
+// Globals
+// ────────────────────────────────────────────────────────────────────────────
+static unsigned long last_fetch_at = 0;
+
+// Deferred location re-resolve flag (set when ZIP changes in settings)
+// The main loop checks this and re-runs location_resolve() + flights_fetch()
+static bool need_relocate = false;
+
+// ────────────────────────────────────────────────────────────────────────────
+// WiFiManager setup — dark-themed captive portal with ZIP code field
+// ────────────────────────────────────────────────────────────────────────────
+static void wifi_setup() {
+    WiFiManager wm;
+    wm.setClass("invert");          // dark theme
+    wm.setTitle("PlaneRadar");
+    wm.setConfigPortalTimeout(180); // 3 min, then try saved creds
+
+    // Custom ZIP code field shown in the captive portal
+    WiFiManagerParameter zip_param(
+        "zip", "ZIP Code (optional — leave blank for auto-location)",
+        settings.zip_code, 10);
+    wm.addParameter(&zip_param);
+
+    // Called when user saves config through the portal
+    wm.setSaveParamsCallback([&]() {
+        const char *zip = zip_param.getValue();
+        if (zip && strlen(zip) >= 5) {
+            strncpy(settings.zip_code, zip, sizeof(settings.zip_code) - 1);
+            settings.location_mode = LOC_ZIP;
+        } else {
+            settings.location_mode = LOC_AUTO;
+            settings.zip_code[0] = '\0';
+        }
+        settings_save();
+    });
+
+    ui_show_wifi_screen();
+
+    bool connected = wm.autoConnect("PlaneRadar");
+    if (!connected) {
+        Serial.println("[WIFI] Could not connect — restarting");
+        delay(3000);
+        ESP.restart();
+    }
+
+    Serial.printf("[WIFI] Connected. IP: %s\n", WiFi.localIP().toString().c_str());
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+void setup() {
+    Serial.begin(115200);
+    Serial.println("\n\n=== PlaneRadar booting ===");
+
+    // ── LVGL init ──────────────────────────────────────────────────────────
+    lv_init();
+
+    // ── Display init ───────────────────────────────────────────────────────
+    lv_bb_spi_lcd_create(DISPLAY_TYPE);
+
+    // ── Touch init ─────────────────────────────────────────────────────────
+    touch_init(TOUCH_SDA, TOUCH_SCL, TOUCH_INT, TOUCH_RST, SCR_W, SCR_H);
+    lv_indev_t *indev = lv_indev_create();
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(indev, touch_read);
+
+    // ── Load saved settings ────────────────────────────────────────────────
+    settings_load();
+
+    // ── Build UI (shows WiFi screen) ───────────────────────────────────────
+    ui_create();
+    lv_timer_handler(); // render once before blocking in wifi_setup
+
+    // ── WiFi ───────────────────────────────────────────────────────────────
+    wifi_setup();
+
+    // ── Location ───────────────────────────────────────────────────────────
+    ui_show_status("Locating...");
+    lv_timer_handler();
+    location_resolve();
+
+    // ── Switch to main screen ──────────────────────────────────────────────
+    ui_show_main_screen();
+    lv_timer_handler();
+
+    // ── First flight fetch ─────────────────────────────────────────────────
+    ui_show_status("Fetching flights...");
+    lv_timer_handler();
+    flights_fetch();
+    ui_update_flights();
+    ui_show_status(nullptr);
+
+    last_fetch_at = millis();
+    Serial.println("[BOOT] Ready.");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+void loop() {
+    lv_timer_handler();
+    delay(5);
+
+    // ── Handle deferred re-locate (triggered from settings ZIP change) ──────
+    if (need_relocate) {
+        need_relocate = false;
+        ui_show_status("Updating location...");
+        lv_timer_handler();
+        location_resolve();
+        ui_show_status("Fetching flights...");
+        lv_timer_handler();
+        flights_fetch();
+        ui_update_flights();
+        ui_show_status(nullptr);
+        last_fetch_at = millis();
+        return;
+    }
+
+    // ── Periodic flight refresh ─────────────────────────────────────────────
+    unsigned long interval_ms = (unsigned long)settings.update_interval_s * 1000UL;
+    if (millis() - last_fetch_at >= interval_ms) {
+        // Re-resolve location if using auto-IP (cheap: just update city label)
+        // Only re-resolve lat/lon if we don't have a fix yet
+        if (settings.latitude == 0.0f && settings.longitude == 0.0f) {
+            location_resolve();
+        }
+        flights_fetch();
+        ui_update_flights();
+        last_fetch_at = millis();
+    }
+
+    // ── Update "X ago" label every second ───────────────────────────────────
+    static unsigned long last_header_ms = 0;
+    if (millis() - last_header_ms >= 1000) {
+        last_header_ms = millis();
+        ui_update_header();
+    }
+}
+
+// ── Called from ui.h settings callback when ZIP is confirmed via keyboard ────
+// Expose this so ui.h can request a re-locate without needing a full fetch here
+void request_relocate() {
+    need_relocate = true;
+}
