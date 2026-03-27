@@ -376,7 +376,8 @@ static void build_main_screen() {
     lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *lbl_title = lv_label_create(hdr);
-    lv_label_set_text(lbl_title, LV_SYMBOL_UPLOAD "  OVERHEAD");
+    // U+2708 ✈ airplane character; falls back to FA plane glyph if not in font
+    lv_label_set_text(lbl_title, "\xe2\x9c\x88  OVERHEAD");
     lv_obj_set_style_text_font(lbl_title, FONT_TITLE, 0);
     lv_obj_set_style_text_color(lbl_title, C_ACCENT, 0);
     lv_obj_set_pos(lbl_title, 8, 10);
