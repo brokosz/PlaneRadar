@@ -46,16 +46,50 @@ static int cmp_distance(const void *a, const void *b) {
     return (da > db) - (da < db);
 }
 
-// ── airplanes.live — free community ADS-B aggregator, no key required ────────
-// radius is in nautical miles; 1 statute mile ≈ 0.869 nm
-// Response: {"ac":[{hex,flight,r,t,lat,lon,alt_baro,gs,track,baro_rate,...}]}
-static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
-    float radius_nm = radius_mi * 0.868976f;
+// ── Shared parser for readsb-format "ac" arrays (airplanes.live + adsb.fi) ───
+static int parse_readsb_ac(JsonArray ac, float ref_lat, float ref_lon) {
+    int count = 0;
+    for (JsonObject a : ac) {
+        if (count >= MAX_FLIGHTS) break;
+        if (!a["alt_baro"].is<int>()) continue;   // "ground" string → skip
+        int alt = a["alt_baro"].as<int>();
+        if (alt <= 0) continue;
+        if (a["lat"].isNull() || a["lon"].isNull()) continue;
 
+        Flight &f = g_flights[count];
+        f.lat            = a["lat"].as<float>();
+        f.lon            = a["lon"].as<float>();
+        f.altitude_ft    = alt;
+        f.speed_kts      = a["gs"].as<int>();
+        f.heading        = a["track"].as<int>();
+        f.vert_speed_fpm = a["baro_rate"].as<int>();
+
+        const char *cs = a["flight"] | "";
+        strncpy(f.flight_num, cs, sizeof(f.flight_num) - 1);
+        f.flight_num[sizeof(f.flight_num) - 1] = '\0';
+        for (int i = strlen(f.flight_num) - 1; i >= 0 && f.flight_num[i] == ' '; i--)
+            f.flight_num[i] = '\0';
+        if (strlen(f.flight_num) == 0)
+            strncpy(f.flight_num, a["hex"] | "N/A", sizeof(f.flight_num) - 1);
+
+        strncpy(f.callsign,     f.flight_num,    sizeof(f.callsign)     - 1);
+        strncpy(f.aircraft,     a["t"] | "---",  sizeof(f.aircraft)     - 1);
+        strncpy(f.registration, a["r"] | "---",  sizeof(f.registration) - 1);
+        strncpy(f.origin,       "---",            sizeof(f.origin)       - 1);
+        strncpy(f.dest,         "---",            sizeof(f.dest)         - 1);
+
+        f.distance_mi = haversine_mi(ref_lat, ref_lon, f.lat, f.lon);
+        count++;
+    }
+    return count;
+}
+
+// ── airplanes.live — free community ADS-B aggregator ─────────────────────────
+static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
     char url[120];
     snprintf(url, sizeof(url),
         "https://api.airplanes.live/v2/point/%.4f/%.4f/%.0f",
-        lat, lon, radius_nm);
+        lat, lon, radius_mi * 0.868976f);
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -70,57 +104,43 @@ static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, http.getStream());
     http.end();
-    if (err) {
-        Serial.printf("[APL] JSON err: %s\n", err.c_str());
-        return false;
-    }
+    if (err) { Serial.printf("[APL] JSON err: %s\n", err.c_str()); return false; }
 
     JsonArray ac = doc["ac"].as<JsonArray>();
-    if (ac.isNull()) {
-        Serial.println("[APL] No 'ac' array in response");
-        return false;
-    }
+    if (ac.isNull()) { Serial.println("[APL] no ac array"); return false; }
 
-    g_flight_count = 0;
-    for (JsonObject a : ac) {
-        if (g_flight_count >= MAX_FLIGHTS) break;
-
-        // Skip aircraft on the ground (alt_baro == "ground" or not a number)
-        if (!a["alt_baro"].is<int>()) continue;
-        int alt = a["alt_baro"].as<int>();
-        if (alt <= 0) continue;
-
-        // Need at least a position
-        if (a["lat"].isNull() || a["lon"].isNull()) continue;
-
-        Flight &f = g_flights[g_flight_count];
-        f.lat         = a["lat"].as<float>();
-        f.lon         = a["lon"].as<float>();
-        f.altitude_ft = alt;
-        f.speed_kts   = a["gs"].as<int>();
-        f.heading     = a["track"].as<int>();
-        f.vert_speed_fpm = a["baro_rate"].as<int>();  // 0 if missing
-
-        // Flight number / callsign (trim trailing spaces)
-        const char *cs = a["flight"] | "";
-        strncpy(f.flight_num, cs, sizeof(f.flight_num) - 1);
-        f.flight_num[sizeof(f.flight_num) - 1] = '\0';
-        for (int i = strlen(f.flight_num) - 1; i >= 0 && f.flight_num[i] == ' '; i--)
-            f.flight_num[i] = '\0';
-        if (strlen(f.flight_num) == 0)
-            strncpy(f.flight_num, a["hex"] | "N/A", sizeof(f.flight_num) - 1);
-
-        strncpy(f.callsign,    f.flight_num,         sizeof(f.callsign)     - 1);
-        strncpy(f.aircraft,    a["t"]  | "---",      sizeof(f.aircraft)     - 1);
-        strncpy(f.registration,a["r"]  | "---",      sizeof(f.registration) - 1);
-        strncpy(f.origin,      "---",                sizeof(f.origin)       - 1);
-        strncpy(f.dest,        "---",                sizeof(f.dest)         - 1);
-
-        f.distance_mi = haversine_mi(lat, lon, f.lat, f.lon);
-        g_flight_count++;
-    }
-
+    g_flight_count = parse_readsb_ac(ac, lat, lon);
     Serial.printf("[APL] Parsed %d airborne flights\n", g_flight_count);
+    return g_flight_count > 0;
+}
+
+// ── adsb.fi open data — second community ADS-B source ────────────────────────
+static bool fetch_adsbfi(float lat, float lon, float radius_mi) {
+    char url[120];
+    snprintf(url, sizeof(url),
+        "https://opendata.adsb.fi/api/v3/lat/%.4f/lon/%.4f/dist/%.0f",
+        lat, lon, radius_mi * 0.868976f);
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, url);
+    http.setTimeout(15000);
+
+    int code = http.GET();
+    Serial.printf("[ADSBFI] HTTP %d\n", code);
+    if (code != 200) { http.end(); return false; }
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, http.getStream());
+    http.end();
+    if (err) { Serial.printf("[ADSBFI] JSON err: %s\n", err.c_str()); return false; }
+
+    JsonArray ac = doc["ac"].as<JsonArray>();
+    if (ac.isNull()) { Serial.println("[ADSBFI] no ac array"); return false; }
+
+    g_flight_count = parse_readsb_ac(ac, lat, lon);
+    Serial.printf("[ADSBFI] Parsed %d airborne flights\n", g_flight_count);
     return g_flight_count > 0;
 }
 
@@ -193,7 +213,7 @@ static bool fetch_opensky(float lat, float lon, float radius_mi) {
     return g_flight_count > 0;
 }
 
-// ── Public fetch — airplanes.live primary, OpenSky fallback ─────────────────
+// ── Public fetch — airplanes.live → adsb.fi → OpenSky ───────────────────────
 inline bool flights_fetch() {
     float lat = settings.latitude;
     float lon = settings.longitude;
@@ -206,7 +226,11 @@ inline bool flights_fetch() {
 
     bool ok = fetch_airplaneslive(lat, lon, r);
     if (!ok) {
-        Serial.println("[FETCH] airplanes.live failed — trying OpenSky");
+        Serial.println("[FETCH] airplanes.live failed — trying adsb.fi");
+        ok = fetch_adsbfi(lat, lon, r);
+    }
+    if (!ok) {
+        Serial.println("[FETCH] adsb.fi failed — trying OpenSky");
         ok = fetch_opensky(lat, lon, r);
     }
 
