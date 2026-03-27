@@ -1,0 +1,115 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.ino'
+      - '**.h'
+      - '**.cpp'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:   # also allows manual trigger from GitHub UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # needed to push the firmware binary back
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Arduino CLI ────────────────────────────────────────────────────────
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Add ESP32 board index
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      # ── Libraries ─────────────────────────────────────────────────────────
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "WiFiManager"
+          arduino-cli lib install "lvgl"
+          arduino-cli lib install "bb_spi_lcd"
+          arduino-cli lib install "bb_captouch"
+
+      # ── Hardware driver files from Halo-F1 ────────────────────────────────
+      # These four files are hardware-specific to the JC4827W543 board and
+      # are maintained in the Halo-F1 repo. We download them fresh each build.
+      - name: Download Halo-F1 driver files
+        run: |
+          BASE="https://raw.githubusercontent.com/FabioRoss/Halo-F1/main"
+          curl -fsSL "$BASE/lv_conf.h"         -o lv_conf.h
+          curl -fsSL "$BASE/lv_bb_spi_lcd.h"   -o lv_bb_spi_lcd.h
+          curl -fsSL "$BASE/lv_bb_spi_lcd.cpp" -o lv_bb_spi_lcd.cpp
+          curl -fsSL "$BASE/touchscreen.h"     -o touchscreen.h
+          echo "Driver files downloaded:"
+          ls -lh lv_conf.h lv_bb_spi_lcd.h lv_bb_spi_lcd.cpp touchscreen.h
+
+      # ── Compile ───────────────────────────────────────────────────────────
+      # FQBN options match the board settings in INSTALL.md:
+      #   FlashSize=16M, PartitionScheme=huge_app, PSRAM=opi, USBMode=hwcdc
+      - name: Compile sketch
+        run: |
+          arduino-cli compile \
+            --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=huge_app,PSRAM=opi,USBMode=hwcdc" \
+            --output-dir build \
+            --export-binaries \
+            PlaneRadar.ino
+
+          echo "Build output:"
+          ls -lh build/
+
+      # ── Merge into single flashable binary ────────────────────────────────
+      - name: Create merged binary
+        run: |
+          if [ -f "build/PlaneRadar.ino.merged.bin" ]; then
+            echo "Using pre-merged binary from Arduino core"
+            cp build/PlaneRadar.ino.merged.bin docs/firmware/PlaneRadar.bin
+          else
+            echo "Merging manually with esptool..."
+            ESPTOOL=$(find ~/.arduino15/packages/esp32/tools/esptool_py -name 'esptool.py' | sort -V | tail -1)
+            BOOT_APP=$(find ~/.arduino15/packages/esp32 -name 'boot_app0.bin' | head -1)
+            echo "esptool: $ESPTOOL"
+            echo "boot_app0: $BOOT_APP"
+            python3 "$ESPTOOL" --chip esp32s3 merge_bin \
+              --output docs/firmware/PlaneRadar.bin \
+              --flash_mode dio --flash_freq 80m --flash_size 16MB \
+              0x0     build/PlaneRadar.ino.bootloader.bin \
+              0x8000  build/PlaneRadar.ino.partitions.bin \
+              0xe000  "$BOOT_APP" \
+              0x10000 build/PlaneRadar.ino.bin
+          fi
+
+          SIZE=$(du -sh docs/firmware/PlaneRadar.bin | cut -f1)
+          echo "Merged binary size: $SIZE"
+
+      # ── Commit firmware back to repo ──────────────────────────────────────
+      # This updates docs/firmware/PlaneRadar.bin so GitHub Pages (the web
+      # installer) always serves the latest build automatically.
+      - name: Commit firmware to repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/firmware/PlaneRadar.bin
+          # Only commit if the binary actually changed
+          if git diff --staged --quiet; then
+            echo "Firmware unchanged — no commit needed"
+          else
+            SHORT=$(git rev-parse --short HEAD)
+            git commit -m "firmware: build from ${SHORT} [skip ci]"
+            git push
+            echo "Firmware pushed to docs/firmware/PlaneRadar.bin"
+          fi
