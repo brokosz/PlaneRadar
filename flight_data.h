@@ -100,14 +100,13 @@ static int parse_readsb_ac(JsonArray ac, float ref_lat, float ref_lon) {
     return count;
 }
 
-// ── Shared HTTPS fetch + filtered JSON parse for readsb-format APIs ──────────
-// setBufferSizes(4096, 512) cuts mbedTLS RX alloc from 16 KB to 4 KB,
-// which fits in fragmented internal SRAM after WiFi + LVGL init.
+// ── Shared HTTP fetch + filtered JSON parse for readsb-format APIs ───────────
+// Plain HTTP (no TLS) eliminates the mbedTLS 16 KB contiguous-SRAM
+// requirement that causes esp-aes OOM failures on a fragmented heap.
+// Flight data is public — no need for encryption.
 static bool fetch_readsb_url(const char *tag, const char *url,
                               float ref_lat, float ref_lon) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    client.setBufferSizes(4096, 512);   // ← key fix: 16 KB → 4 KB RX buffer
+    WiFiClient client;   // plain TCP — no TLS overhead
 
     HTTPClient http;
     http.begin(client, url);
@@ -137,7 +136,7 @@ static bool fetch_readsb_url(const char *tag, const char *url,
 static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
     char url[120];
     snprintf(url, sizeof(url),
-        "https://api.airplanes.live/v2/point/%.4f/%.4f/%.0f",
+        "http://api.airplanes.live/v2/point/%.4f/%.4f/%.0f",
         lat, lon, radius_mi * 0.868976f);
     return fetch_readsb_url("APL", url, lat, lon);
 }
@@ -146,7 +145,7 @@ static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
 static bool fetch_adsbfi(float lat, float lon, float radius_mi) {
     char url[120];
     snprintf(url, sizeof(url),
-        "https://opendata.adsb.fi/api/v3/lat/%.4f/lon/%.4f/dist/%.0f",
+        "http://opendata.adsb.fi/api/v3/lat/%.4f/lon/%.4f/dist/%.0f",
         lat, lon, radius_mi * 0.868976f);
     return fetch_readsb_url("ADSBFI", url, lat, lon);
 }
@@ -166,7 +165,6 @@ static bool fetch_opensky(float lat, float lon, float radius_mi) {
 
     WiFiClientSecure client;
     client.setInsecure();
-    client.setBufferSizes(4096, 512);
     HTTPClient http;
     http.begin(client, url);
     http.setTimeout(15000);
