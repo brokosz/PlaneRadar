@@ -100,21 +100,21 @@ static int parse_readsb_ac(JsonArray ac, float ref_lat, float ref_lon) {
     return count;
 }
 
-// ── airplanes.live — free community ADS-B aggregator ─────────────────────────
-static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
-    char url[120];
-    snprintf(url, sizeof(url),
-        "https://api.airplanes.live/v2/point/%.4f/%.4f/%.0f",
-        lat, lon, radius_mi * 0.868976f);
-
+// ── Shared HTTPS fetch + filtered JSON parse for readsb-format APIs ──────────
+// setBufferSizes(4096, 512) cuts mbedTLS RX alloc from 16 KB to 4 KB,
+// which fits in fragmented internal SRAM after WiFi + LVGL init.
+static bool fetch_readsb_url(const char *tag, const char *url,
+                              float ref_lat, float ref_lon) {
     WiFiClientSecure client;
     client.setInsecure();
+    client.setBufferSizes(4096, 512);   // ← key fix: 16 KB → 4 KB RX buffer
+
     HTTPClient http;
     http.begin(client, url);
     http.setTimeout(15000);
 
     int code = http.GET();
-    Serial.printf("[APL] HTTP %d\n", code);
+    Serial.printf("[%s] HTTP %d\n", tag, code);
     if (code != 200) { http.end(); return false; }
 
     JsonDocument filter;
@@ -123,14 +123,23 @@ static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
     DeserializationError err = deserializeJson(doc, http.getStream(),
                                                DeserializationOption::Filter(filter));
     http.end();
-    if (err) { Serial.printf("[APL] JSON err: %s\n", err.c_str()); return false; }
+    if (err) { Serial.printf("[%s] JSON err: %s\n", tag, err.c_str()); return false; }
 
     JsonArray ac = doc["ac"].as<JsonArray>();
-    if (ac.isNull()) { Serial.println("[APL] no ac array"); return false; }
+    if (ac.isNull()) { Serial.printf("[%s] no ac array\n", tag); return false; }
 
-    g_flight_count = parse_readsb_ac(ac, lat, lon);
-    Serial.printf("[APL] Parsed %d airborne flights\n", g_flight_count);
+    g_flight_count = parse_readsb_ac(ac, ref_lat, ref_lon);
+    Serial.printf("[%s] Parsed %d airborne flights\n", tag, g_flight_count);
     return g_flight_count > 0;
+}
+
+// ── airplanes.live — free community ADS-B aggregator ─────────────────────────
+static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
+    char url[120];
+    snprintf(url, sizeof(url),
+        "https://api.airplanes.live/v2/point/%.4f/%.4f/%.0f",
+        lat, lon, radius_mi * 0.868976f);
+    return fetch_readsb_url("APL", url, lat, lon);
 }
 
 // ── adsb.fi open data — second community ADS-B source ────────────────────────
@@ -139,31 +148,7 @@ static bool fetch_adsbfi(float lat, float lon, float radius_mi) {
     snprintf(url, sizeof(url),
         "https://opendata.adsb.fi/api/v3/lat/%.4f/lon/%.4f/dist/%.0f",
         lat, lon, radius_mi * 0.868976f);
-
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-    http.begin(client, url);
-    http.setTimeout(15000);
-
-    int code = http.GET();
-    Serial.printf("[ADSBFI] HTTP %d\n", code);
-    if (code != 200) { http.end(); return false; }
-
-    JsonDocument filter;
-    make_readsb_filter(filter);
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getStream(),
-                                               DeserializationOption::Filter(filter));
-    http.end();
-    if (err) { Serial.printf("[ADSBFI] JSON err: %s\n", err.c_str()); return false; }
-
-    JsonArray ac = doc["ac"].as<JsonArray>();
-    if (ac.isNull()) { Serial.println("[ADSBFI] no ac array"); return false; }
-
-    g_flight_count = parse_readsb_ac(ac, lat, lon);
-    Serial.printf("[ADSBFI] Parsed %d airborne flights\n", g_flight_count);
-    return g_flight_count > 0;
+    return fetch_readsb_url("ADSBFI", url, lat, lon);
 }
 
 // ── OpenSky Network fallback ──────────────────────────────────────────────────
@@ -181,6 +166,7 @@ static bool fetch_opensky(float lat, float lon, float radius_mi) {
 
     WiFiClientSecure client;
     client.setInsecure();
+    client.setBufferSizes(4096, 512);
     HTTPClient http;
     http.begin(client, url);
     http.setTimeout(15000);
