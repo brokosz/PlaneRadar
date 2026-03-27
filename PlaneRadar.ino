@@ -127,6 +127,7 @@ void setup() {
 
     // ── LVGL init ──────────────────────────────────────────────────────────
     lv_init();
+    lv_tick_set_cb([]() -> uint32_t { return (uint32_t)millis(); });
 
     // ── Display init ───────────────────────────────────────────────────────
     lv_bb_spi_lcd_create(DISPLAY_TYPE);
