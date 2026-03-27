@@ -26,6 +26,27 @@
  *   USB Mode:      Hardware CDC and JTAG
  */
 
+// ── All #defines must come before their respective #includes ─────────────────
+
+// Display type for bb_spi_lcd (from Halo-F1 source)
+#define DISPLAY_TYPE  DISPLAY_CYD_543
+
+// Touch pins and calibration — read by touchscreen.h at include time
+#define TOUCH_SDA        8
+#define TOUCH_SCL        4
+#define TOUCH_INT        3
+#define TOUCH_RST        (-1)
+#define TOUCH_MIN_X      1
+#define TOUCH_MAX_X      480
+#define TOUCH_MIN_Y      1
+#define TOUCH_MAX_Y      272
+#define TOUCH_CAPACITIVE    // use GT911 capacitive, not resistive SPI
+
+// Screen dimensions
+#define SCR_W  480
+#define SCR_H  272
+
+// ── Includes ─────────────────────────────────────────────────────────────────
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -39,26 +60,6 @@
 #include "location.h"
 #include "flight_data.h"
 #include "ui.h"
-
-// ── Display type constant for bb_spi_lcd (from Halo-F1 source) ───────────────
-#define DISPLAY_TYPE  DISPLAY_CYD_543
-
-// ── Touch pins (GT911 capacitive, same as Halo-F1) ───────────────────────────
-#define TOUCH_SDA  8
-#define TOUCH_SCL  4
-#define TOUCH_INT  3
-#define TOUCH_RST  (-1)
-
-// ── Touch calibration (required by touchscreen.h from Halo-F1) ───────────────
-#define TOUCH_MIN_X  1
-#define TOUCH_MAX_X  480
-#define TOUCH_MIN_Y  1
-#define TOUCH_MAX_Y  272
-#define TOUCH_CAPACITIVE   // use GT911, not resistive SPI touch
-
-// ── Screen dimensions ────────────────────────────────────────────────────────
-#define SCR_W  480
-#define SCR_H  272
 
 // ────────────────────────────────────────────────────────────────────────────
 // Globals

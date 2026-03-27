@@ -24,6 +24,11 @@ LV_FONT_DECLARE(lv_font_montserrat_12)
 // Defined in PlaneRadar.ino — triggers location re-resolve on next loop tick
 extern void request_relocate();
 
+// Forward declarations for screen builders (defined later in this file)
+static void build_main_screen();
+static void build_settings_screen();
+void ui_show_main_screen();
+
 #define FONT_TITLE  &lv_font_montserrat_20
 #define FONT_HDR    &lv_font_montserrat_14
 #define FONT_DATA   &lv_font_montserrat_14
