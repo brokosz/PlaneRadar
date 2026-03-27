@@ -36,13 +36,13 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
 
-      # ── Libraries ─────────────────────────────────────────────────────────
+      # ── Libraries — pinned to versions HaloF1 is built with ─────────────────
       - name: Install libraries
         run: |
-          arduino-cli lib install "ArduinoJson"
-          arduino-cli lib install "WiFiManager"
-          arduino-cli lib install "lvgl"
-          arduino-cli lib install "bb_spi_lcd"
+          arduino-cli lib install "ArduinoJson@7.3.0"
+          arduino-cli lib install "WiFiManager@2.0.17"
+          arduino-cli lib install "lvgl@9.3.0"
+          arduino-cli lib install "bb_spi_lcd@2.7.1"
           arduino-cli lib install "bb_captouch"
 
       # ── Hardware driver files from Halo-F1 ────────────────────────────────
@@ -55,7 +55,17 @@ jobs:
           curl -fsSL "$BASE/lv_bb_spi_lcd.h"   -o lv_bb_spi_lcd.h
           curl -fsSL "$BASE/lv_bb_spi_lcd.cpp" -o lv_bb_spi_lcd.cpp
           curl -fsSL "$BASE/touchscreen.h"     -o touchscreen.h
-          echo "Driver files downloaded:"
+
+          # lv_bb_spi_lcd.cpp is compiled as a sketch .cpp file.
+          # Arduino only auto-injects Arduino.h into .ino files, so uint16_t
+          # and friends are undefined unless we include it explicitly first.
+          if ! head -5 lv_bb_spi_lcd.cpp | grep -q 'Arduino'; then
+            printf '#include <Arduino.h>\n' | cat - lv_bb_spi_lcd.cpp > /tmp/patched.cpp
+            mv /tmp/patched.cpp lv_bb_spi_lcd.cpp
+            echo "Patched: prepended #include <Arduino.h> to lv_bb_spi_lcd.cpp"
+          fi
+
+          echo "Driver files ready:"
           ls -lh lv_conf.h lv_bb_spi_lcd.h lv_bb_spi_lcd.cpp touchscreen.h
 
       # ── Compile ───────────────────────────────────────────────────────────
