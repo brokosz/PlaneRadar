@@ -27,24 +27,34 @@
  */
 
 // ── All #defines must come before their respective #includes ─────────────────
+// (Matches the pin config at the top of F1Halo.ino exactly)
 
-// Display type for bb_spi_lcd (from Halo-F1 source)
-#define DISPLAY_TYPE  DISPLAY_CYD_543
+// Display type for bb_spi_lcd
+#define DISPLAY_TYPE     DISPLAY_CYD_543
 
-// Touch pins and calibration — read by touchscreen.h at include time
+// Touch — capacitive (GT911) pins
+#define TOUCH_CAPACITIVE        // select GT911 path in touchscreen.h
 #define TOUCH_SDA        8
 #define TOUCH_SCL        4
 #define TOUCH_INT        3
 #define TOUCH_RST        (-1)
+// Resistive touch SPI pins (unused when TOUCH_CAPACITIVE is set, but
+// touchscreen.h may reference them at compile time)
+#define TOUCH_MOSI       11
+#define TOUCH_MISO       13
+#define TOUCH_CLK        12
+#define TOUCH_CS         38
+// Touch calibration bounds
 #define TOUCH_MIN_X      1
 #define TOUCH_MAX_X      480
 #define TOUCH_MIN_Y      1
 #define TOUCH_MAX_Y      272
-#define TOUCH_CAPACITIVE    // use GT911 capacitive, not resistive SPI
 
-// Screen dimensions
-#define SCR_W  480
-#define SCR_H  272
+// Native display resolution (portrait). LVGL rotates to landscape at runtime.
+#define SCREEN_WIDTH   272
+#define SCREEN_HEIGHT  480
+#define SCR_W          480    // logical landscape width  after rotation
+#define SCR_H          272    // logical landscape height after rotation
 
 // ── Includes ─────────────────────────────────────────────────────────────────
 #include <Arduino.h>
@@ -127,7 +137,8 @@ void setup() {
     }
 
     // ── Touch init ─────────────────────────────────────────────────────────
-    touch_init(TOUCH_SDA, TOUCH_SCL, TOUCH_INT, TOUCH_RST, SCR_W, SCR_H);
+    // touchscreen.h declares a global BBCapTouch bbct — init it directly
+    bbct.init(TOUCH_SDA, TOUCH_SCL, TOUCH_INT, TOUCH_RST);
     lv_indev_t *indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(indev, touch_read);
