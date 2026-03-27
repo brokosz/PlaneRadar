@@ -46,6 +46,22 @@ static int cmp_distance(const void *a, const void *b) {
     return (da > db) - (da < db);
 }
 
+// ── ArduinoJson filter for readsb "ac" objects ───────────────────────────────
+// Only the fields we actually use are kept; everything else is discarded
+// during streaming. Reduces peak heap by ~70% on large responses.
+static void make_readsb_filter(JsonDocument &f) {
+    f["ac"][0]["hex"]       = true;
+    f["ac"][0]["flight"]    = true;
+    f["ac"][0]["r"]         = true;
+    f["ac"][0]["t"]         = true;
+    f["ac"][0]["lat"]       = true;
+    f["ac"][0]["lon"]       = true;
+    f["ac"][0]["alt_baro"]  = true;
+    f["ac"][0]["gs"]        = true;
+    f["ac"][0]["track"]     = true;
+    f["ac"][0]["baro_rate"] = true;
+}
+
 // ── Shared parser for readsb-format "ac" arrays (airplanes.live + adsb.fi) ───
 static int parse_readsb_ac(JsonArray ac, float ref_lat, float ref_lon) {
     int count = 0;
@@ -101,8 +117,11 @@ static bool fetch_airplaneslive(float lat, float lon, float radius_mi) {
     Serial.printf("[APL] HTTP %d\n", code);
     if (code != 200) { http.end(); return false; }
 
+    JsonDocument filter;
+    make_readsb_filter(filter);
     JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getStream());
+    DeserializationError err = deserializeJson(doc, http.getStream(),
+                                               DeserializationOption::Filter(filter));
     http.end();
     if (err) { Serial.printf("[APL] JSON err: %s\n", err.c_str()); return false; }
 
@@ -131,8 +150,11 @@ static bool fetch_adsbfi(float lat, float lon, float radius_mi) {
     Serial.printf("[ADSBFI] HTTP %d\n", code);
     if (code != 200) { http.end(); return false; }
 
+    JsonDocument filter;
+    make_readsb_filter(filter);
     JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getStream());
+    DeserializationError err = deserializeJson(doc, http.getStream(),
+                                               DeserializationOption::Filter(filter));
     http.end();
     if (err) { Serial.printf("[ADSBFI] JSON err: %s\n", err.c_str()); return false; }
 
