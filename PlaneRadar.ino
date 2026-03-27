@@ -40,17 +40,21 @@
 #include "flight_data.h"
 #include "ui.h"
 
-// ── Display type constant for bb_spi_lcd ─────────────────────────────────────
-// JC4827W543 / CYD543 — check lv_bb_spi_lcd.cpp from Halo-F1 for the exact
-// constant used there (it may be named LCD_CYD543 or DISPLAY_CYD543).
-// The value below matches what Halo-F1 uses at time of writing.
-#define DISPLAY_TYPE  LCD_CYD543
+// ── Display type constant for bb_spi_lcd (from Halo-F1 source) ───────────────
+#define DISPLAY_TYPE  DISPLAY_CYD_543
 
 // ── Touch pins (GT911 capacitive, same as Halo-F1) ───────────────────────────
 #define TOUCH_SDA  8
 #define TOUCH_SCL  4
 #define TOUCH_INT  3
 #define TOUCH_RST  (-1)
+
+// ── Touch calibration (required by touchscreen.h from Halo-F1) ───────────────
+#define TOUCH_MIN_X  1
+#define TOUCH_MAX_X  480
+#define TOUCH_MIN_Y  1
+#define TOUCH_MAX_Y  272
+#define TOUCH_CAPACITIVE   // use GT911, not resistive SPI touch
 
 // ── Screen dimensions ────────────────────────────────────────────────────────
 #define SCR_W  480
