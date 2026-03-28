@@ -10,20 +10,22 @@
 
 ## What it shows
 
-Every aircraft currently overhead, sorted by distance, refreshed every 30 seconds:
+Every aircraft currently overhead, sorted by distance, refreshed automatically:
 
-| Column | Example | Source |
-|--------|---------|--------|
-| Flight # | `AA2341` | FlightRadar24 |
-| Route | `ORD→LAX` | FlightRadar24 |
-| Aircraft type | `B738` | FlightRadar24 |
-| Altitude | `35,000 ft` | ADS-B |
-| Speed | `485 kts` | ADS-B |
-| Trend | `↑` climbing | ADS-B |
-| Distance | `12.3 mi` | calculated |
+| Column | Example |
+|--------|---------|
+| Flight # / callsign | `AA2341` |
+| Aircraft type | `B738` |
+| Altitude | `35000 ft` ↑ |
+| Speed | `485 kts` |
+| Distance | `12.3 mi` |
 
-Primary data source: **FlightRadar24** (unofficial feed, no API key needed).
-Fallback: **OpenSky Network** (official free API).
+Tap any row for a detail card with registration, heading, and vertical speed.
+
+Data sources (in order, automatic fallback):
+1. **airplanes.live** — free community ADS-B aggregator
+2. **adsb.fi** — open ADS-B data
+3. **OpenSky Network** — official free API (100 req/day limit)
 
 ---
 
@@ -33,10 +35,9 @@ Fallback: **OpenSky Network** (official free API).
 |-|--|
 | Board | JC4827W543 |
 | MCU | ESP32-S3 |
-| Display | 4.3" TFT, 480×272, capacitive touch |
-| Touch | GT911 |
+| Display | 4.3" TFT, 480×272, capacitive touch (GT911) |
 
-Same hardware as [Halo-F1](https://halof1.com) — buy it on AliExpress by searching **JC4827W543**.
+Same hardware as [Halo-F1](https://halof1.com) — find it on AliExpress by searching **JC4827W543**.
 
 ---
 
@@ -54,17 +55,33 @@ Open **[brokosz.github.io/PlaneRadar](https://brokosz.github.io/PlaneRadar)** in
 2. Connect to it on your phone — a setup page opens automatically
 3. Enter your home Wi-Fi credentials
 4. Optionally enter a **ZIP code** (leave blank to auto-locate via IP)
-5. Flights appear within ~30 seconds
+5. Optionally set display orientation (Landscape or Portrait — default is Portrait)
+6. Flights appear within ~30 seconds
 
 ---
 
-## On-device settings
+## Navigation
 
-Tap the **⚙** icon (top-right) at any time:
+Three tabs at the bottom of the screen:
 
-- **Location** — Auto (IP geolocation) or manual ZIP code
-- **Search radius** — 25 / 50 / 100 / 200 miles
-- **Update interval** — 30s / 60s / 2min / 5min
+| Tab | What it does |
+|-----|-------------|
+| **ALL** | Show all tracked aircraft |
+| **AIRLINES** | Filter to commercial flights only (airline callsigns) |
+| **SETTINGS** | Open the settings screen |
+
+Switching between ALL and AIRLINES immediately refetches with the new filter applied.
+
+---
+
+## Settings
+
+| Setting | Options |
+|---------|---------|
+| **Location** | Auto (IP geolocation) or manual ZIP code |
+| **Search radius** | 25 / 50 / 100 / 200 miles |
+| **Update interval** | 30s / 60s / 2min / 5min |
+| **Orientation** | Landscape or Portrait |
 
 ---
 
@@ -76,12 +93,12 @@ To trigger a build manually: **Actions → Build Firmware → Run workflow**.
 
 The compiled binary is committed to `docs/firmware/PlaneRadar.bin` and immediately served by the web installer.
 
-### If you want to build locally
+### Local build
 
 1. Install [Arduino IDE 2](https://www.arduino.cc/en/software)
-2. Add ESP32 board support (URL: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`)
+2. Add ESP32 board support (`https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`)
 3. Install libraries: `ArduinoJson`, `WiFiManager`, `lvgl`, `bb_spi_lcd`, `bb_captouch`
-4. Copy driver files from [Halo-F1](https://github.com/FabioRoss/Halo-F1) into this folder: `lv_conf.h`, `lv_bb_spi_lcd.h`, `lv_bb_spi_lcd.cpp`, `touchscreen.h`
+4. Copy driver files from [Halo-F1](https://github.com/FabioRoss/Halo-F1): `lv_conf.h`, `lv_bb_spi_lcd.h`, `lv_bb_spi_lcd.cpp`, `touchscreen.h`
 5. Board settings: ESP32S3 Dev Module · Flash 16MB · PSRAM OPI · Partition Huge APP · USB HW CDC
 6. **Sketch → Export Compiled Binary**, then run `./scripts/export_firmware.sh`
 
@@ -93,11 +110,11 @@ The compiled binary is committed to `docs/firmware/PlaneRadar.bin` and immediate
 PlaneRadar/
 ├── PlaneRadar.ino       Main sketch — init, WiFi, fetch loop
 ├── ui.h                 LVGL screens (main, settings, WiFi)
-├── flight_data.h        FlightRadar24 + OpenSky fetch & parse
+├── flight_data.h        ADS-B fetch & parse (airplanes.live / adsb.fi / OpenSky)
 ├── location.h           IP geolocation + ZIP → lat/lon
 ├── settings.h           NVS-persisted settings
 ├── docs/
-│   ├── index.html       Web installer page (GitHub Pages)
+│   ├── index.html       Web installer (GitHub Pages)
 │   ├── manifest.json    esp-web-tools firmware manifest
 │   └── firmware/        Compiled binary (auto-updated by CI)
 └── .github/workflows/
@@ -110,8 +127,4 @@ PlaneRadar/
 
 - Hardware driver files (`lv_bb_spi_lcd`, `touchscreen.h`) — [Halo-F1 by FabioRoss](https://github.com/FabioRoss/Halo-F1)
 - Web installer — [esp-web-tools by ESPHome](https://esphome.github.io/esp-web-tools/)
-- Flight data — [FlightRadar24](https://flightradar24.com) / [OpenSky Network](https://opensky-network.org)
-
----
-
-*Not affiliated with FlightRadar24. Uses their publicly accessible data feed.*
+- Flight data — [airplanes.live](https://airplanes.live) / [adsb.fi](https://adsb.fi) / [OpenSky Network](https://opensky-network.org)
