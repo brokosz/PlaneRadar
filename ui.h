@@ -69,7 +69,7 @@ static lv_obj_t *lbl_loc_info = nullptr;
 static lv_obj_t *btn_r[4]     = {};
 static lv_obj_t *btn_i[4]     = {};
 static lv_obj_t *btn_ori[2]   = {};   // [0]=landscape, [1]=portrait
-static lv_obj_t *btn_commercial[2] = {};  // [0]=all, [1]=commercial only
+static lv_obj_t *btn_tab[3]        = {};  // [0]=ALL, [1]=AIRLINES, [2]=SETTINGS
 static const int RADIUS_OPTS[]   = {25, 50, 100, 200};
 static const int INTERVAL_OPTS[] = {30, 60, 120, 300};
 
@@ -81,7 +81,6 @@ static lv_obj_t *lbl_status = nullptr;
 static lv_obj_t *det_overlay = nullptr;
 static lv_obj_t *det_flt     = nullptr;
 static lv_obj_t *det_sub     = nullptr;
-static lv_obj_t *det_route   = nullptr;
 static lv_obj_t *det_alt     = nullptr;
 static lv_obj_t *det_spd     = nullptr;
 static lv_obj_t *det_hdg     = nullptr;
@@ -146,15 +145,16 @@ static void fmt_ago(char *buf, size_t len) {
 
 // ── Update header ─────────────────────────────────────────────────────────────
 void ui_update_header() {
-    if (!lbl_city) return;
-    lv_label_set_text(lbl_city, settings.city_name);
-
-    char buf[32];
-    fmt_ago(buf, sizeof(buf));
-    if (lbl_updated) lv_label_set_text(lbl_updated, buf);
-
-    snprintf(buf, sizeof(buf), "%d flights", g_flight_count);
-    if (lbl_count) lv_label_set_text(lbl_count, buf);
+    char buf[40];
+    if (lbl_city) lv_label_set_text(lbl_city, settings.city_name);
+    if (lbl_updated) {
+        fmt_ago(buf, sizeof(buf));
+        lv_label_set_text(lbl_updated, buf);
+    }
+    if (lbl_count) {
+        snprintf(buf, sizeof(buf), "%d flights", g_flight_count);
+        lv_label_set_text(lbl_count, buf);
+    }
 }
 
 // ── Update flight list rows ───────────────────────────────────────────────────
@@ -234,10 +234,8 @@ static void cb_open_settings(lv_event_t *e) {
         if (btn_i[i]) lv_obj_set_state(btn_i[i],
             LV_STATE_CHECKED, INTERVAL_OPTS[i] == settings.update_interval_s);
     }
-    if (btn_ori[0]) lv_obj_set_state(btn_ori[0],
-        LV_STATE_CHECKED, settings.orientation == ORI_LANDSCAPE);
-    if (btn_ori[1]) lv_obj_set_state(btn_ori[1],
-        LV_STATE_CHECKED, settings.orientation == ORI_PORTRAIT);
+    if (btn_ori[0]) lv_obj_set_state(btn_ori[0], LV_STATE_CHECKED, settings.orientation == ORI_LANDSCAPE);
+    if (btn_ori[1]) lv_obj_set_state(btn_ori[1], LV_STATE_CHECKED, settings.orientation == ORI_PORTRAIT);
     if (scr_settings)
         lv_screen_load_anim(scr_settings, LV_SCR_LOAD_ANIM_MOVE_LEFT, 250, 0, false);
 }
@@ -309,8 +307,8 @@ static void cb_orientation(lv_event_t *e) {
     btn_loc_auto = btn_loc_zip = ta_zip = kb = lbl_loc_info = nullptr;
     for (int i = 0; i < 4; i++) { btn_r[i] = btn_i[i] = nullptr; }
     btn_ori[0] = btn_ori[1] = nullptr;
-    btn_commercial[0] = btn_commercial[1] = nullptr;
-    det_overlay = det_flt = det_sub = det_route = nullptr;
+    btn_tab[0] = btn_tab[1] = btn_tab[2] = nullptr;
+    det_overlay = det_flt = det_sub = nullptr;
     det_alt = det_spd = det_hdg = det_dist = det_vs = nullptr;
     ov_status = lbl_status = nullptr;
     lbl_city = lbl_updated = lbl_count = nullptr;
@@ -319,12 +317,19 @@ static void cb_orientation(lv_event_t *e) {
     ui_show_main_screen();
 }
 
-static void cb_traffic_filter(lv_event_t *e) {
-    bool commercial = (bool)(intptr_t)lv_event_get_user_data(e);
+static void cb_tab(lv_event_t *e) {
+    int tab = (int)(intptr_t)lv_event_get_user_data(e);
+    if (tab == 2) { cb_open_settings(e); return; }
+    bool commercial = (tab == 1);
+    if (settings.commercial_only == commercial) return;
     settings.commercial_only = commercial;
     settings_save();
-    if (btn_commercial[0]) lv_obj_set_state(btn_commercial[0], LV_STATE_CHECKED, !commercial);
-    if (btn_commercial[1]) lv_obj_set_state(btn_commercial[1], LV_STATE_CHECKED,  commercial);
+    for (int i = 0; i < 3; i++)
+        if (btn_tab[i]) lv_obj_set_state(btn_tab[i], LV_STATE_CHECKED, i == tab);
+    ui_show_status(commercial ? "Airlines only..." : "All traffic...");
+    flights_fetch();
+    ui_update_flights();
+    ui_show_status(nullptr);
 }
 
 // ── Detail card callbacks ─────────────────────────────────────────────────────
@@ -345,9 +350,6 @@ static void cb_row_click(lv_event_t *e) {
         strcmp(f.aircraft,     "---") != 0 ? f.aircraft     : "?",
         strcmp(f.registration, "---") != 0 ? f.registration : "");
     lv_label_set_text(det_sub, buf);
-
-    snprintf(buf, sizeof(buf), "%s  >  %s", f.origin, f.dest);
-    lv_label_set_text(det_route, buf);
 
     // altitude with trend indicator colour
     snprintf(buf, sizeof(buf), "%d ft  %s", f.altitude_ft, trend_arrow(f));
@@ -463,48 +465,28 @@ static void build_main_screen() {
     lv_obj_set_pos(lbl_title, 8, 10);
 
     if (!port) {
-        // City + updated labels fit in landscape header
+        // Landscape: city, updated, count all fit in 480px header (no gear button)
         lbl_city = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
-        lv_obj_set_pos(lbl_city, 170, 14);
-        lv_obj_set_width(lbl_city, 150);
+        lv_obj_set_pos(lbl_city, 140, 14);
+        lv_obj_set_width(lbl_city, 110);
         lv_label_set_text(lbl_city, settings.city_name);
 
-        lbl_updated = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
-        lv_obj_set_pos(lbl_updated, 330, 14);
-        lv_obj_set_width(lbl_updated, 90);
+        lbl_updated = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_pos(lbl_updated, 258, 14);
+        lv_obj_set_width(lbl_updated, 86);
         lv_label_set_text(lbl_updated, "---");
-    } else {
-        // Portrait: flight count in header, city + updated in footer (separate positions)
-        lbl_count = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
-        lv_obj_set_pos(lbl_count, 100, 14);
-        lv_obj_set_width(lbl_count, 120);
+
+        lbl_count = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
+        lv_obj_set_pos(lbl_count, 350, 14);
+        lv_obj_set_width(lbl_count, 126);
         lv_label_set_text(lbl_count, "");
-
-        lbl_city    = make_label(scr_main, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
-        lbl_updated = make_label(scr_main, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
-        lv_obj_set_pos(lbl_city,    4,   scr_h - 16);
-        lv_obj_set_pos(lbl_updated, 134, scr_h - 16);
-        lv_obj_set_width(lbl_city,    126);
-        lv_obj_set_width(lbl_updated, 134);
-        lv_label_set_text(lbl_city,    settings.city_name);
-        lv_label_set_text(lbl_updated, "---");
+    } else {
+        // Portrait: count in header; city/updated not shown on main screen
+        lbl_count = make_label(hdr, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_pos(lbl_count, 134, 14);
+        lv_obj_set_width(lbl_count, 134);
+        lv_label_set_text(lbl_count, "");
     }
-
-    // Gear button — top-right, visually distinct from header
-    lv_obj_t *btn_gear = lv_btn_create(hdr);
-    lv_obj_set_size(btn_gear, 40, 36);
-    lv_obj_set_pos(btn_gear, scr_w - 42, 2);
-    lv_obj_set_style_bg_color(btn_gear, C_SURFACE2, 0);
-    lv_obj_set_style_bg_color(btn_gear, C_ACCENT, LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn_gear, lv_color_hex(0x333333), 0);
-    lv_obj_set_style_border_width(btn_gear, 1, 0);
-    lv_obj_set_style_radius(btn_gear, 4, 0);
-    lv_obj_add_event_cb(btn_gear, cb_open_settings, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t *lbl_gear = lv_label_create(btn_gear);
-    lv_label_set_text(lbl_gear, "SET");
-    lv_obj_set_style_text_color(lbl_gear, C_TEXT, 0);
-    lv_obj_set_style_text_font(lbl_gear, FONT_HDR, 0);
-    lv_obj_center(lbl_gear);
 
     // ── Column headers ────────────────────────────────────────────────────────
     int list_y;
@@ -547,8 +529,8 @@ static void build_main_screen() {
     }
 
     // ── Scrollable flight list ────────────────────────────────────────────────
-    // Portrait: leave 16px footer (city + updated); landscape: flush to bottom
-    int list_h = scr_h - list_y - (port ? 16 : 0);
+    const int TAB_H = 36;
+    int list_h = scr_h - list_y - TAB_H;
     lv_obj_t *list = lv_obj_create(scr_main);
     lv_obj_set_pos(list, 0, list_y);
     lv_obj_set_size(list, scr_w, list_h);
@@ -561,19 +543,54 @@ static void build_main_screen() {
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
-    // Landscape: bottom-right count label.  Portrait: already in header (set above).
-    if (!port) {
-        lbl_count = make_label(scr_main, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
-        lv_obj_set_pos(lbl_count, 0, scr_h - 14);
-        lv_obj_set_width(lbl_count, scr_w - 4);
-    }
-
     for (int i = 0; i < MAX_ROWS; i++) {
         g_rows[i] = make_row(list, i);
         lv_obj_add_flag(g_rows[i].row, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(g_rows[i].row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(g_rows[i].row, cb_row_click, LV_EVENT_CLICKED,
                             (void *)(intptr_t)i);
+    }
+
+    // ── Bottom tab bar ────────────────────────────────────────────────────────
+    {
+        lv_obj_t *tabs = lv_obj_create(scr_main);
+        lv_obj_set_size(tabs, scr_w, TAB_H);
+        lv_obj_set_pos(tabs, 0, scr_h - TAB_H);
+        lv_obj_set_style_bg_color(tabs, C_SURFACE, 0);
+        lv_obj_set_style_bg_opa(tabs, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(tabs, 0, 0);
+        lv_obj_set_style_radius(tabs, 0, 0);
+        lv_obj_set_style_pad_all(tabs, 0, 0);
+        lv_obj_set_style_pad_column(tabs, 0, 0);
+        lv_obj_clear_flag(tabs, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_flex_flow(tabs, LV_FLEX_FLOW_ROW);
+
+        const char *tab_labels[] = { "ALL", "AIRLINES", "SETTINGS" };
+        int tab_w = scr_w / 3;
+        for (int i = 0; i < 3; i++) {
+            btn_tab[i] = lv_btn_create(tabs);
+            lv_obj_set_size(btn_tab[i], tab_w, TAB_H);
+            lv_obj_set_style_bg_color(btn_tab[i], C_SURFACE,  0);
+            lv_obj_set_style_bg_color(btn_tab[i], C_SURFACE2, LV_STATE_CHECKED);
+            lv_obj_set_style_border_width(btn_tab[i], 0, 0);
+            lv_obj_set_style_border_width(btn_tab[i], 2, LV_STATE_CHECKED);
+            lv_obj_set_style_border_side(btn_tab[i],
+                (lv_border_side_t)LV_BORDER_SIDE_TOP, LV_STATE_CHECKED);
+            lv_obj_set_style_border_color(btn_tab[i], C_ACCENT, LV_STATE_CHECKED);
+            lv_obj_set_style_radius(btn_tab[i], 0, 0);
+            lv_obj_set_style_pad_all(btn_tab[i], 0, 0);
+            lv_obj_add_flag(btn_tab[i], LV_OBJ_FLAG_CHECKABLE);
+            lv_obj_add_event_cb(btn_tab[i], cb_tab, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+            lv_obj_t *lbl = lv_label_create(btn_tab[i]);
+            lv_label_set_text(lbl, tab_labels[i]);
+            lv_obj_set_style_text_font(lbl, FONT_SMALL, 0);
+            lv_obj_set_style_text_color(lbl, C_DIM, 0);
+            lv_obj_set_style_text_color(lbl, C_ACCENT, LV_STATE_CHECKED);
+            lv_obj_center(lbl);
+            // Mark active tab based on current filter
+            bool active = (i == (settings.commercial_only ? 1 : 0));
+            lv_obj_set_state(btn_tab[i], LV_STATE_CHECKED, active);
+        }
     }
 
     // ── Detail card overlay ───────────────────────────────────────────────────
@@ -648,7 +665,6 @@ static void build_main_screen() {
         return v;
     };
 
-    det_route = det_row("ROUTE",   C_TEXT);
     det_alt   = det_row("ALT",     lv_color_hex(0x66bb6a));
     det_spd   = det_row("SPEED",   C_SPD);
     det_hdg   = det_row("HEADING", C_TEXT);
@@ -782,16 +798,6 @@ static void build_settings_screen() {
     lv_obj_set_state(btn_ori[0], LV_STATE_CHECKED, settings.orientation == ORI_LANDSCAPE);
     lv_obj_set_state(btn_ori[1], LV_STATE_CHECKED, settings.orientation == ORI_PORTRAIT);
 
-    // ── Traffic filter ────────────────────────────────────────────────────────
-    section("TRAFFIC");
-    lv_obj_t *rowT = row_obj();
-    btn_commercial[0] = make_btn(rowT, "All", cb_traffic_filter, (void *)(intptr_t)false);
-    lv_obj_set_size(btn_commercial[0], port ? 80 : 90, 32);
-    btn_commercial[1] = make_btn(rowT, "Airlines", cb_traffic_filter, (void *)(intptr_t)true);
-    lv_obj_set_size(btn_commercial[1], port ? 90 : 110, 32);
-    lv_obj_set_state(btn_commercial[0], LV_STATE_CHECKED, !settings.commercial_only);
-    lv_obj_set_state(btn_commercial[1], LV_STATE_CHECKED,  settings.commercial_only);
-
     // ── Location mode ─────────────────────────────────────────────────────────
     section("LOCATION");
     lv_obj_t *row1 = row_obj();
@@ -896,8 +902,8 @@ void ui_rebuild_screens() {
     btn_loc_auto = btn_loc_zip = ta_zip = kb = lbl_loc_info = nullptr;
     for (int i = 0; i < 4; i++) { btn_r[i] = btn_i[i] = nullptr; }
     btn_ori[0] = btn_ori[1] = nullptr;
-    btn_commercial[0] = btn_commercial[1] = nullptr;
-    det_overlay = det_flt = det_sub = det_route = nullptr;
+    btn_tab[0] = btn_tab[1] = btn_tab[2] = nullptr;
+    det_overlay = det_flt = det_sub = nullptr;
     det_alt = det_spd = det_hdg = det_dist = det_vs = nullptr;
     ov_status = lbl_status = nullptr;
     lbl_city = lbl_updated = lbl_count = nullptr;
