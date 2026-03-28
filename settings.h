@@ -13,7 +13,7 @@ struct Settings {
     int          radius_miles   = 50;
     int          update_interval_s = 30;
     char         city_name[64]  = "Unknown";
-    Orientation  orientation    = ORI_LANDSCAPE;
+    Orientation  orientation    = ORI_PORTRAIT;
 };
 
 extern Settings settings;
@@ -29,7 +29,7 @@ inline void settings_load() {
     settings.radius_miles      = p.getInt("radius",     50);
     settings.update_interval_s = p.getInt("interval",   30);
     p.getString("city",  settings.city_name,  sizeof(settings.city_name));
-    settings.orientation       = (Orientation)p.getInt("orient", ORI_LANDSCAPE);
+    settings.orientation       = (Orientation)p.getInt("orient", ORI_PORTRAIT);
     p.end();
 }
 

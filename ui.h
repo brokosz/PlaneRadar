@@ -375,6 +375,13 @@ static void build_main_screen() {
     lv_obj_set_style_radius(hdr, 0, 0);
     lv_obj_set_style_pad_all(hdr, 0, 0);
     lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+    // Double-tap anywhere on the header opens settings (fallback if gear is hard to reach)
+    lv_obj_add_event_cb(hdr, [](lv_event_t *e) {
+        static uint32_t last_tap = 0;
+        uint32_t now = lv_tick_get();
+        if (now - last_tap < 400) cb_open_settings(e);
+        last_tap = now;
+    }, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t *lbl_title = lv_label_create(hdr);
     // U+F072 FontAwesome 4 plane — in LVGL's built-in symbol font
