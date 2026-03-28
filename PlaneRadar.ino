@@ -148,12 +148,11 @@ void setup() {
     // ── Display init ───────────────────────────────────────────────────────
     lv_bb_spi_lcd_create(DISPLAY_TYPE);
 
-    // Physical panel is 272×480 portrait-native.
-    // Landscape mode rotates 90° so LVGL logical becomes 480×272.
-    // Portrait mode uses no rotation — logical stays 272×480.
-    if (settings.orientation == ORI_LANDSCAPE) {
-        lv_display_set_rotation(lv_display_get_default(), LV_DISPLAY_ROTATION_90);
-    }
+    // bb_spi_lcd hardware rotation — avoids LVGL software rotation which
+    // requires a second draw buffer in partial mode.
+    // rot 3 = portrait (272×480),  rot 1 = landscape (480×272)
+    lv_bb_spi_lcd_set_rotation(lv_display_get_default(),
+        settings.orientation == ORI_LANDSCAPE ? 1 : 3);
 
     // ── Touch init ─────────────────────────────────────────────────────────
     // touchscreen.h declares a global BBCapTouch bbct — init it directly
@@ -173,10 +172,9 @@ void setup() {
     // If orientation was changed via the portal, re-apply rotation and
     // rebuild the main/settings screens for the new dimensions.
     if (settings.orientation != ori_before) {
-        lv_display_set_rotation(lv_display_get_default(),
-            settings.orientation == ORI_LANDSCAPE
-                ? LV_DISPLAY_ROTATION_90 : LV_DISPLAY_ROTATION_0);
-        ui_rebuild_screens();   // declared in ui.h
+        lv_bb_spi_lcd_set_rotation(lv_display_get_default(),
+            settings.orientation == ORI_LANDSCAPE ? 1 : 3);
+        ui_rebuild_screens();
     }
 
     // ── Location ───────────────────────────────────────────────────────────

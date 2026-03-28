@@ -296,9 +296,10 @@ static void cb_orientation(lv_event_t *e) {
     if (ori == settings.orientation) return;   // no change
     settings.orientation = ori;
     settings_save();
-    // Apply immediately — lv_display_set_rotation swaps w/h and remaps touch
-    lv_display_set_rotation(lv_display_get_default(),
-        ori == ORI_LANDSCAPE ? LV_DISPLAY_ROTATION_90 : LV_DISPLAY_ROTATION_0);
+    // Hardware rotation via bb_spi_lcd — reliable in partial rendering mode.
+    // rot 1 = landscape (480×272),  rot 3 = portrait (272×480)
+    lv_bb_spi_lcd_set_rotation(lv_display_get_default(),
+        ori == ORI_LANDSCAPE ? 1 : 3);
     // Rebuild all screens for the new dimensions
     lv_obj_del(scr_main);     scr_main     = nullptr;
     lv_obj_del(scr_settings); scr_settings = nullptr;

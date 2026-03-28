@@ -65,6 +65,23 @@ jobs:
             echo "Patched: prepended #include <Arduino.h> to lv_bb_spi_lcd.cpp"
           fi
 
+          # Patch: expose hardware rotation so PlaneRadar can use bb_spi_lcd's
+          # setRotation() directly. LVGL software rotation (lv_display_set_rotation)
+          # requires a second draw buffer in PARTIAL mode; without it only the logical
+          # dimensions update but pixels aren't physically rotated. Hardware rotation
+          # via setRotation() + lv_display_set_resolution() is reliable with any mode.
+          sed -i 's|lv_display_t \* lv_bb_spi_lcd_create(int iType);|lv_display_t * lv_bb_spi_lcd_create(int iType);\nvoid lv_bb_spi_lcd_set_rotation(lv_display_t *disp, int rot);|' lv_bb_spi_lcd.h
+
+          cat >> lv_bb_spi_lcd.cpp << 'HWROT'
+
+void lv_bb_spi_lcd_set_rotation(lv_display_t *disp, int rot) {
+    lv_bb_spi_lcd_t *dsc = (lv_bb_spi_lcd_t *)lv_display_get_driver_data(disp);
+    dsc->lcd->setRotation(rot);
+    lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_0); // clear any LVGL sw rotation
+    lv_display_set_resolution(disp, dsc->lcd->width(), dsc->lcd->height());
+}
+HWROT
+
           echo "Driver files ready:"
           ls -lh lv_conf.h lv_bb_spi_lcd.h lv_bb_spi_lcd.cpp touchscreen.h
 
