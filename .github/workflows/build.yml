@@ -120,6 +120,7 @@ jobs:
           else
             SHORT=$(git rev-parse --short HEAD)
             git commit -m "firmware: build from ${SHORT} [skip ci]"
+            git pull --rebase
             git push
             echo "Firmware pushed to docs/firmware/PlaneRadar.bin"
           fi
