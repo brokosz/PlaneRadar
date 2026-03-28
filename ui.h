@@ -68,6 +68,7 @@ static lv_obj_t *lbl_loc_info = nullptr;
 static lv_obj_t *btn_r[4]     = {};
 static lv_obj_t *btn_i[4]     = {};
 static lv_obj_t *btn_ori[2]   = {};   // [0]=landscape, [1]=portrait
+static lv_obj_t *btn_commercial[2] = {};  // [0]=all, [1]=commercial only
 static const int RADIUS_OPTS[]   = {25, 50, 100, 200};
 static const int INTERVAL_OPTS[] = {30, 60, 120, 300};
 
@@ -159,7 +160,7 @@ void ui_update_flights() {
 
             snprintf(spd,  sizeof(spd),  "%d kts", f.speed_kts);
             snprintf(dist, sizeof(dist), "%.1f mi", f.distance_mi);
-            snprintf(route, sizeof(route), "%s\xE2\x86\x92%s", f.origin, f.dest); // →
+            snprintf(route, sizeof(route), "%s>%s", f.origin, f.dest);
 
             lv_label_set_text(g_rows[i].lbl_flt,   f.flight_num);
             lv_label_set_text(g_rows[i].lbl_route,  route);
@@ -295,11 +296,20 @@ static void cb_orientation(lv_event_t *e) {
     btn_loc_auto = btn_loc_zip = ta_zip = kb = lbl_loc_info = nullptr;
     for (int i = 0; i < 4; i++) { btn_r[i] = btn_i[i] = nullptr; }
     btn_ori[0] = btn_ori[1] = nullptr;
+    btn_commercial[0] = btn_commercial[1] = nullptr;
     ov_status = lbl_status = nullptr;
     lbl_city = lbl_updated = lbl_count = nullptr;
     build_main_screen();
     build_settings_screen();
     ui_show_main_screen();
+}
+
+static void cb_traffic_filter(lv_event_t *e) {
+    bool commercial = (bool)(intptr_t)lv_event_get_user_data(e);
+    settings.commercial_only = commercial;
+    settings_save();
+    if (btn_commercial[0]) lv_obj_set_state(btn_commercial[0], LV_STATE_CHECKED, !commercial);
+    if (btn_commercial[1]) lv_obj_set_state(btn_commercial[1], LV_STATE_CHECKED,  commercial);
 }
 
 // ── Row factory — adapts to landscape (480×33) or portrait (272×48, 2 lines) ──
@@ -384,8 +394,7 @@ static void build_main_screen() {
     }, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t *lbl_title = lv_label_create(hdr);
-    // U+F072 FontAwesome 4 plane — in LVGL's built-in symbol font
-    lv_label_set_text(lbl_title, "\xef\x81\xb2  OVERHEAD");
+    lv_label_set_text(lbl_title, "OVERHEAD");
     lv_obj_set_style_text_font(lbl_title, FONT_TITLE, 0);
     lv_obj_set_style_text_color(lbl_title, C_ACCENT, 0);
     lv_obj_set_pos(lbl_title, 8, 10);
@@ -424,7 +433,7 @@ static void build_main_screen() {
     lv_obj_set_style_radius(btn_gear, 4, 0);
     lv_obj_add_event_cb(btn_gear, cb_open_settings, LV_EVENT_CLICKED, nullptr);
     lv_obj_t *lbl_gear = lv_label_create(btn_gear);
-    lv_label_set_text(lbl_gear, LV_SYMBOL_SETTINGS);
+    lv_label_set_text(lbl_gear, "SET");
     lv_obj_set_style_text_color(lbl_gear, C_TEXT, 0);
     lv_obj_set_style_text_font(lbl_gear, FONT_HDR, 0);
     lv_obj_center(lbl_gear);
@@ -544,7 +553,7 @@ static void build_settings_screen() {
     lv_obj_set_style_border_width(btn_back, 0, 0);
     lv_obj_add_event_cb(btn_back, cb_close_settings, LV_EVENT_CLICKED, nullptr);
     lv_obj_t *lbl_back = lv_label_create(btn_back);
-    lv_label_set_text(lbl_back, LV_SYMBOL_LEFT);
+    lv_label_set_text(lbl_back, "< BACK");
     lv_obj_set_style_text_color(lbl_back, C_ACCENT, 0);
     lv_obj_center(lbl_back);
 
@@ -601,6 +610,16 @@ static void build_settings_screen() {
     lv_obj_set_size(btn_ori[1], port ? 100 : 110, 32);
     lv_obj_set_state(btn_ori[0], LV_STATE_CHECKED, settings.orientation == ORI_LANDSCAPE);
     lv_obj_set_state(btn_ori[1], LV_STATE_CHECKED, settings.orientation == ORI_PORTRAIT);
+
+    // ── Traffic filter ────────────────────────────────────────────────────────
+    section("TRAFFIC");
+    lv_obj_t *rowT = row_obj();
+    btn_commercial[0] = make_btn(rowT, "All", cb_traffic_filter, (void *)(intptr_t)false);
+    lv_obj_set_size(btn_commercial[0], port ? 80 : 90, 32);
+    btn_commercial[1] = make_btn(rowT, "Airlines", cb_traffic_filter, (void *)(intptr_t)true);
+    lv_obj_set_size(btn_commercial[1], port ? 90 : 110, 32);
+    lv_obj_set_state(btn_commercial[0], LV_STATE_CHECKED, !settings.commercial_only);
+    lv_obj_set_state(btn_commercial[1], LV_STATE_CHECKED,  settings.commercial_only);
 
     // ── Location mode ─────────────────────────────────────────────────────────
     section("LOCATION");
@@ -673,7 +692,7 @@ static void build_wifi_screen() {
     lv_obj_clear_flag(scr_wifi, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *icon = lv_label_create(scr_wifi);
-    lv_label_set_text(icon, LV_SYMBOL_WIFI);
+    lv_label_set_text(icon, "WiFi");
     lv_obj_set_style_text_font(icon, &lv_font_montserrat_38, 0);
     lv_obj_set_style_text_color(icon, C_ACCENT, 0);
     lv_obj_align(icon, LV_ALIGN_CENTER, 0, -40);

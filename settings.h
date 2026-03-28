@@ -14,6 +14,7 @@ struct Settings {
     int          update_interval_s = 30;
     char         city_name[64]  = "Unknown";
     Orientation  orientation    = ORI_PORTRAIT;
+    bool         commercial_only = false;  // false = all traffic, true = airlines only
 };
 
 extern Settings settings;
@@ -30,6 +31,7 @@ inline void settings_load() {
     settings.update_interval_s = p.getInt("interval",   30);
     p.getString("city",  settings.city_name,  sizeof(settings.city_name));
     settings.orientation       = (Orientation)p.getInt("orient", ORI_PORTRAIT);
+    settings.commercial_only   = p.getBool("commercial", false);
     p.end();
 }
 
@@ -44,5 +46,6 @@ inline void settings_save() {
     p.putInt("interval",  settings.update_interval_s);
     p.putString("city",   settings.city_name);
     p.putInt("orient",    settings.orientation);
+    p.putBool("commercial", settings.commercial_only);
     p.end();
 }

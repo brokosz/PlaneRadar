@@ -88,6 +88,15 @@ static int parse_readsb_ac(JsonArray ac, float ref_lat, float ref_lon) {
         if (strlen(f.flight_num) == 0)
             strncpy(f.flight_num, a["hex"] | "N/A", sizeof(f.flight_num) - 1);
 
+        // Commercial-only filter: airline callsigns start with 2-3 letters then digits
+        if (settings.commercial_only) {
+            const char *fn = f.flight_num;
+            int letters = 0;
+            while (fn[letters] && isalpha((unsigned char)fn[letters])) letters++;
+            bool has_digits = letters >= 2 && letters <= 3 && isdigit((unsigned char)fn[letters]);
+            if (!has_digits) continue;
+        }
+
         strncpy(f.callsign,     f.flight_num,    sizeof(f.callsign)     - 1);
         strncpy(f.aircraft,     a["t"] | "---",  sizeof(f.aircraft)     - 1);
         strncpy(f.registration, a["r"] | "---",  sizeof(f.registration) - 1);
@@ -257,10 +266,11 @@ inline bool flights_fetch() {
 }
 
 // ── Display helpers ───────────────────────────────────────────────────────────
+// ASCII-only trend indicator — LV_SYMBOL_* glyphs not in LVGL Arduino font build
 inline const char *trend_arrow(const Flight &f) {
-    if (f.vert_speed_fpm > 200)  return LV_SYMBOL_UP;
-    if (f.vert_speed_fpm < -200) return LV_SYMBOL_DOWN;
-    return LV_SYMBOL_RIGHT;
+    if (f.vert_speed_fpm > 200)  return "+";
+    if (f.vert_speed_fpm < -200) return "-";
+    return "=";
 }
 
 inline uint32_t trend_color(const Flight &f) {
