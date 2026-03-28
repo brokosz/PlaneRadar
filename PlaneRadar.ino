@@ -89,11 +89,18 @@ static void wifi_setup() {
     wm.setTitle("PlaneRadar");
     wm.setConfigPortalTimeout(180); // 3 min, then try saved creds
 
-    // Custom ZIP code field shown in the captive portal
+    // Custom fields shown in the captive portal
     WiFiManagerParameter zip_param(
         "zip", "ZIP Code (optional — leave blank for auto-location)",
         settings.zip_code, 10);
     wm.addParameter(&zip_param);
+
+    // Orientation — "L" = Landscape (default), "P" = Portrait
+    const char *ori_default = (settings.orientation == ORI_PORTRAIT) ? "P" : "L";
+    WiFiManagerParameter ori_param(
+        "ori", "Display Orientation (L=Landscape, P=Portrait)",
+        ori_default, 2);
+    wm.addParameter(&ori_param);
 
     // Called when user saves config through the portal
     wm.setSaveParamsCallback([&]() {
@@ -104,6 +111,12 @@ static void wifi_setup() {
         } else {
             settings.location_mode = LOC_AUTO;
             settings.zip_code[0] = '\0';
+        }
+        const char *ori = ori_param.getValue();
+        if (ori && (ori[0] == 'P' || ori[0] == 'p')) {
+            settings.orientation = ORI_PORTRAIT;
+        } else {
+            settings.orientation = ORI_LANDSCAPE;
         }
         settings_save();
     });
@@ -154,7 +167,17 @@ void setup() {
     lv_timer_handler(); // render once before blocking in wifi_setup
 
     // ── WiFi ───────────────────────────────────────────────────────────────
+    Orientation ori_before = settings.orientation;
     wifi_setup();
+
+    // If orientation was changed via the portal, re-apply rotation and
+    // rebuild the main/settings screens for the new dimensions.
+    if (settings.orientation != ori_before) {
+        lv_display_set_rotation(lv_display_get_default(),
+            settings.orientation == ORI_LANDSCAPE
+                ? LV_DISPLAY_ROTATION_90 : LV_DISPLAY_ROTATION_0);
+        ui_rebuild_screens();   // declared in ui.h
+    }
 
     // ── Location ───────────────────────────────────────────────────────────
     ui_show_status("Locating...");

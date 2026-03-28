@@ -28,6 +28,7 @@ extern void request_relocate();
 static void build_main_screen();
 static void build_settings_screen();
 void ui_show_main_screen();
+void ui_rebuild_screens();
 
 #define FONT_TITLE  &lv_font_montserrat_20
 #define FONT_HDR    &lv_font_montserrat_14
@@ -488,6 +489,7 @@ static void build_main_screen() {
     lv_obj_set_style_pad_all(list, 0, 0);
     lv_obj_set_style_pad_row(list, 0, 0);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
     lbl_count = make_label(scr_main, FONT_SMALL, C_DIM, LV_TEXT_ALIGN_RIGHT);
     lv_obj_set_pos(lbl_count, 0, scr_h - 16);
@@ -716,6 +718,21 @@ static void build_wifi_screen() {
     lv_obj_set_size(sp, 36, 36);
     lv_obj_align(sp, LV_ALIGN_BOTTOM_MID, 0, -16);
     lv_obj_set_style_arc_color(sp, C_ACCENT, LV_PART_INDICATOR);
+}
+
+// ── Rebuild main + settings screens (called after orientation change) ─────────
+void ui_rebuild_screens() {
+    if (scr_main)     { lv_obj_del(scr_main);     scr_main     = nullptr; }
+    if (scr_settings) { lv_obj_del(scr_settings); scr_settings = nullptr; }
+    for (int i = 0; i < MAX_ROWS; i++) g_rows[i] = {};
+    btn_loc_auto = btn_loc_zip = ta_zip = kb = lbl_loc_info = nullptr;
+    for (int i = 0; i < 4; i++) { btn_r[i] = btn_i[i] = nullptr; }
+    btn_ori[0] = btn_ori[1] = nullptr;
+    btn_commercial[0] = btn_commercial[1] = nullptr;
+    ov_status = lbl_status = nullptr;
+    lbl_city = lbl_updated = lbl_count = nullptr;
+    build_main_screen();
+    build_settings_screen();
 }
 
 // ── Public init ───────────────────────────────────────────────────────────────
