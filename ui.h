@@ -402,21 +402,26 @@ static FlightRow make_row(lv_obj_t *parent, int idx) {
         r.lbl_dist  = col(410, 64, C_DIST,                  LV_TEXT_ALIGN_RIGHT);
     } else {
         // ── Portrait: two lines, width=272 ────────────────────────────────
-        // Line 1 (y=5):  FLT(66) ROUTE(86) TYPE(44)  DIST(right,64)
-        // Line 2 (y=28): ALT(110)           SPD(80)  TREND(22)
+        // Line 1 (y=6):  FLIGHT(140)              DIST(right, 70)
+        // Line 2 (y=28): ALT(110)  SPD(84)  TREND(22)
         auto col = [&](int x, int w, int y, lv_color_t c, lv_text_align_t a) -> lv_obj_t * {
             lv_obj_t *l = make_label(r.row, FONT_DATA, c, a);
             lv_obj_set_pos(l, x + 4, y);
             lv_obj_set_width(l, w - 6);
             return l;
         };
-        r.lbl_flt   = col(0,   66,  5, C_ACCENT,               LV_TEXT_ALIGN_LEFT);
-        r.lbl_route = col(66,  86,  5, C_TEXT,                  LV_TEXT_ALIGN_LEFT);
-        r.lbl_type  = col(152, 44,  5, C_DIM,                   LV_TEXT_ALIGN_LEFT);
-        r.lbl_dist  = col(196, 70,  5, C_DIST,                  LV_TEXT_ALIGN_RIGHT);
-        r.lbl_alt   = col(0,  110, 28, lv_color_hex(0x66bb6a),  LV_TEXT_ALIGN_LEFT);
-        r.lbl_spd   = col(110, 80, 28, C_SPD,                   LV_TEXT_ALIGN_LEFT);
-        r.lbl_trend = col(190, 26, 28, C_DIM,                   LV_TEXT_ALIGN_CENTER);
+        r.lbl_flt   = col(0,   140,  6, C_ACCENT,               LV_TEXT_ALIGN_LEFT);
+        r.lbl_dist  = col(196,  70,  6, C_DIST,                  LV_TEXT_ALIGN_RIGHT);
+        r.lbl_alt   = col(0,   110, 28, lv_color_hex(0x66bb6a),  LV_TEXT_ALIGN_LEFT);
+        r.lbl_spd   = col(110,  84, 28, C_SPD,                   LV_TEXT_ALIGN_LEFT);
+        r.lbl_trend = col(194,  26, 28, C_DIM,                   LV_TEXT_ALIGN_CENTER);
+        // Not shown in portrait rows — kept off-screen so ui_update_flights doesn't crash
+        r.lbl_route = make_label(r.row, FONT_DATA, C_TEXT, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_pos(r.lbl_route, -500, 0);
+        lv_obj_set_width(r.lbl_route, 1);
+        r.lbl_type  = make_label(r.row, FONT_DATA, C_DIM, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_pos(r.lbl_type,  -500, 0);
+        lv_obj_set_width(r.lbl_type, 1);
     }
     return r;
 }
@@ -529,10 +534,8 @@ static void build_main_screen() {
             ch(382, 28, "",         LV_TEXT_ALIGN_CENTER);
             ch(410, 64, "DIST",     LV_TEXT_ALIGN_RIGHT);
         } else {
-            ch(0,   66, "FLIGHT", LV_TEXT_ALIGN_LEFT);
-            ch(66,  86, "REG",    LV_TEXT_ALIGN_LEFT);
-            ch(152, 44, "TYPE",   LV_TEXT_ALIGN_LEFT);
-            ch(196, 70, "DIST",   LV_TEXT_ALIGN_RIGHT);
+            ch(0,   140, "FLIGHT", LV_TEXT_ALIGN_LEFT);
+            ch(196,  70, "DIST",   LV_TEXT_ALIGN_RIGHT);
         }
         lv_obj_t *sep = lv_obj_create(scr_main);
         lv_obj_set_size(sep, scr_w, 1);
@@ -585,7 +588,8 @@ static void build_main_screen() {
     lv_obj_set_style_border_width(det_overlay, 0, 0);
     lv_obj_set_style_radius(det_overlay, 0, 0);
     lv_obj_clear_flag(det_overlay, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(det_overlay, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(det_overlay, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(det_overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(det_overlay, cb_close_detail, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t *card = lv_obj_create(det_overlay);
