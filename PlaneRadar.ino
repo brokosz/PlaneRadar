@@ -125,6 +125,9 @@ void setup() {
     Serial.begin(115200);
     Serial.println("\n\n=== PlaneRadar booting ===");
 
+    // ── Load saved settings FIRST — orientation must be known before display ─
+    settings_load();
+
     // ── LVGL init ──────────────────────────────────────────────────────────
     lv_init();
     lv_tick_set_cb([]() -> uint32_t { return (uint32_t)millis(); });
@@ -132,8 +135,10 @@ void setup() {
     // ── Display init ───────────────────────────────────────────────────────
     lv_bb_spi_lcd_create(DISPLAY_TYPE);
 
-    // Apply saved orientation (must happen before any UI is built)
-    if (settings.orientation == ORI_PORTRAIT) {
+    // Physical panel is 272×480 portrait-native.
+    // Landscape mode rotates 90° so LVGL logical becomes 480×272.
+    // Portrait mode uses no rotation — logical stays 272×480.
+    if (settings.orientation == ORI_LANDSCAPE) {
         lv_display_set_rotation(lv_display_get_default(), LV_DISPLAY_ROTATION_90);
     }
 
@@ -143,9 +148,6 @@ void setup() {
     lv_indev_t *indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(indev, touch_read);
-
-    // ── Load saved settings ────────────────────────────────────────────────
-    settings_load();
 
     // ── Build UI (shows WiFi screen) ───────────────────────────────────────
     ui_create();

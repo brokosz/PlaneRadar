@@ -287,7 +287,7 @@ static void cb_orientation(lv_event_t *e) {
     settings_save();
     // Apply immediately — lv_display_set_rotation swaps w/h and remaps touch
     lv_display_set_rotation(lv_display_get_default(),
-        ori == ORI_PORTRAIT ? LV_DISPLAY_ROTATION_90 : LV_DISPLAY_ROTATION_0);
+        ori == ORI_LANDSCAPE ? LV_DISPLAY_ROTATION_90 : LV_DISPLAY_ROTATION_0);
     // Rebuild all screens for the new dimensions
     lv_obj_del(scr_main);     scr_main     = nullptr;
     lv_obj_del(scr_settings); scr_settings = nullptr;
@@ -385,6 +385,7 @@ static void build_main_screen() {
     lv_obj_set_style_radius(hdr, 0, 0);
     lv_obj_set_style_pad_all(hdr, 0, 0);
     lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(hdr, LV_OBJ_FLAG_CLICKABLE);   // required for LV_EVENT_CLICKED to fire
     // Double-tap anywhere on the header opens settings (fallback if gear is hard to reach)
     lv_obj_add_event_cb(hdr, [](lv_event_t *e) {
         static uint32_t last_tap = 0;
