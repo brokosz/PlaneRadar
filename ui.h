@@ -224,7 +224,8 @@ static void cb_open_settings(lv_event_t *e) {
         LV_STATE_CHECKED, settings.orientation == ORI_LANDSCAPE);
     if (btn_ori[1]) lv_obj_set_state(btn_ori[1],
         LV_STATE_CHECKED, settings.orientation == ORI_PORTRAIT);
-    lv_screen_load_anim(scr_settings, LV_SCR_LOAD_ANIM_MOVE_LEFT, 250, 0, false);
+    if (scr_settings)
+        lv_screen_load_anim(scr_settings, LV_SCR_LOAD_ANIM_MOVE_LEFT, 250, 0, false);
 }
 
 static void cb_loc_auto(lv_event_t *e) {
@@ -405,17 +406,20 @@ static void build_main_screen() {
         lv_label_set_text(lbl_updated, "---");
     }
 
-    // Gear button — always top-right
+    // Gear button — top-right, visually distinct from header
     lv_obj_t *btn_gear = lv_btn_create(hdr);
-    lv_obj_set_size(btn_gear, 36, 36);
-    lv_obj_set_pos(btn_gear, scr_w - 38, 2);
-    lv_obj_set_style_bg_color(btn_gear, C_SURFACE, 0);
-    lv_obj_set_style_border_width(btn_gear, 0, 0);
+    lv_obj_set_size(btn_gear, 40, 36);
+    lv_obj_set_pos(btn_gear, scr_w - 42, 2);
+    lv_obj_set_style_bg_color(btn_gear, C_SURFACE2, 0);
+    lv_obj_set_style_bg_color(btn_gear, C_ACCENT, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn_gear, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_border_width(btn_gear, 1, 0);
     lv_obj_set_style_radius(btn_gear, 4, 0);
     lv_obj_add_event_cb(btn_gear, cb_open_settings, LV_EVENT_CLICKED, nullptr);
     lv_obj_t *lbl_gear = lv_label_create(btn_gear);
     lv_label_set_text(lbl_gear, LV_SYMBOL_SETTINGS);
-    lv_obj_set_style_text_color(lbl_gear, C_DIM, 0);
+    lv_obj_set_style_text_color(lbl_gear, C_TEXT, 0);
+    lv_obj_set_style_text_font(lbl_gear, FONT_HDR, 0);
     lv_obj_center(lbl_gear);
 
     // ── Column headers (landscape only — too narrow in portrait) ─────────────
